@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Outfit, DM_Sans } from "next/font/google";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-display",
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -18,10 +26,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
-        {children}
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body
+        className={`${outfit.variable} ${dmSans.variable} font-[var(--font-body)] antialiased`}
+        suppressHydrationWarning
+      >
+        <ToastProvider>
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );
 }
+

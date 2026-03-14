@@ -1,30 +1,13 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// ─── Types ───────────────────────────────────────────────────
-
 interface LoadingProps {
-  /** Text shown below the spinner */
   text?: string
-  /** Spinner size */
   size?: 'sm' | 'md' | 'lg'
-  /** Additional CSS classes */
   className?: string
-  /** Overlay mode — covers parent with backdrop */
   overlay?: boolean
 }
-
-// ─── Size map ────────────────────────────────────────────────
-
-const SIZES = {
-  sm: 'w-5 h-5',
-  md: 'w-8 h-8',
-  lg: 'w-12 h-12',
-} as const
-
-// ─── Component ───────────────────────────────────────────────
 
 export function Loading({
   text = 'Loading...',
@@ -32,16 +15,32 @@ export function Loading({
   className,
   overlay = false,
 }: LoadingProps) {
+  const dotSize = { sm: 'w-1.5 h-1.5', md: 'w-2 h-2', lg: 'w-2.5 h-2.5' }[size]
+  
   const content = (
-    <div className={cn('flex flex-col items-center gap-3', className)}>
-      <Loader2 className={cn(SIZES[size], 'animate-spin text-indigo-500')} />
-      {text && <p className="text-sm text-zinc-500 font-medium">{text}</p>}
+    <div className={cn('flex flex-col items-center gap-4', className)}>
+      {/* Dot pulse pattern */}
+      <div className="flex items-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className={cn(dotSize, 'rounded-full bg-[#FF6B4A]')}
+            style={{
+              animation: 'dotPulse 1.4s ease-in-out infinite',
+              animationDelay: `${i * 0.16}s`,
+            }}
+          />
+        ))}
+      </div>
+      {text && (
+        <p className="text-xs text-stone-500 font-medium tracking-wide">{text}</p>
+      )}
     </div>
   )
 
   if (overlay) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
+      <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20 rounded-inherit">
         {content}
       </div>
     )

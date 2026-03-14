@@ -6,6 +6,5 @@ coverage/
 .env*
 !.env.example
 
-.agent
 .agents
 docs

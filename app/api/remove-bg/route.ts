@@ -115,11 +115,10 @@ export async function POST(req: Request) {
       console.error("Replicate error:", e);
     }
 
-    return NextResponse.json({ error: "All background removal services failed" }, { status: 500 });
+    return NextResponse.json({ error: "Background removal is temporarily unavailable. Your original image will be used instead." }, { status: 500 });
 
   } catch (error) {
     console.error("API error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: "Something went wrong with background removal. Please try again." }, { status: 500 });
   }
 }
