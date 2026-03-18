@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
-import { Outfit, DM_Sans } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
+import { ThemeProvider } from "@/hooks/use-theme";
+import type { Metadata } from "next";
+import { DM_Sans, Outfit } from "next/font/google";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -31,9 +32,11 @@ export default function RootLayout({
         className={`${outfit.variable} ${dmSans.variable} font-[var(--font-body)] antialiased`}
         suppressHydrationWarning
       >
-        <ToastProvider>
-          {children}
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

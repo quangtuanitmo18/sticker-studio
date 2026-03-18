@@ -59,10 +59,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl bg-[#1C1917]/95 backdrop-blur-xl border ${borders[t.type]} shadow-2xl shadow-black/40 animate-slide-in-right max-w-sm`}
           >
             {icons[t.type]}
-            <p className="text-sm text-stone-300 leading-relaxed flex-1">{t.message}</p>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed flex-1">{t.message}</p>
             <button
               onClick={() => removeToast(t.id)}
-              className="text-stone-600 hover:text-stone-400 transition-colors shrink-0 cursor-pointer"
+              className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>

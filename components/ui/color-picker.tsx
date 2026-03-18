@@ -19,7 +19,7 @@ interface ColorPickerProps {
 export function ColorPicker({ value, onChange, presets, label, showHexInput = false }: ColorPickerProps) {
   return (
     <section>
-      <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider text-stone-500">{label}</h3>
+      <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider text-[var(--text-tertiary)]">{label}</h3>
       <div className="flex flex-wrap gap-2">
         {presets.map((color) => (
           <button
@@ -27,7 +27,7 @@ export function ColorPicker({ value, onChange, presets, label, showHexInput = fa
             onClick={() => onChange(color)}
             className={cn(
               "w-9 h-9 rounded-full border-2 transition-all duration-200 hover:scale-110 shadow-sm cursor-pointer",
-              value === color ? "border-[#FF6B4A] ring-2 ring-[#FF6B4A]/30 scale-110" : "border-stone-700 hover:border-stone-500"
+              value === color ? "border-[#FF6B4A] ring-2 ring-[#FF6B4A]/30 scale-110" : "border-[var(--overlay-border)] hover:border-stone-500"
             )}
             style={{ backgroundColor: color }}
             title={color}
@@ -37,7 +37,7 @@ export function ColorPicker({ value, onChange, presets, label, showHexInput = fa
       {showHexInput && (
         <div className="mt-3 flex items-center gap-2">
           <div
-            className="w-8 h-8 rounded-lg border border-stone-700 shadow-inner"
+            className="w-8 h-8 rounded-lg border border-[var(--overlay-border)] shadow-inner"
             style={{ backgroundColor: value }}
           />
           <input
@@ -54,7 +54,7 @@ export function ColorPicker({ value, onChange, presets, label, showHexInput = fa
                 onChange(e.target.value)
               }
             }}
-            className="flex-1 px-3 py-1.5 rounded-lg bg-stone-800 border border-stone-700 text-sm font-mono text-stone-300 focus:border-[#FF6B4A]/50 focus:outline-none transition-colors"
+            className="flex-1 px-3 py-1.5 rounded-lg bg-[var(--surface-raised)] border border-[var(--overlay-border)] text-sm font-mono text-[var(--text-secondary)] focus:border-[#FF6B4A]/50 focus:outline-none transition-colors"
             placeholder="#000000"
           />
         </div>

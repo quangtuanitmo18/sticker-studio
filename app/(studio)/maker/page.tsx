@@ -1,26 +1,38 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
 import { Loading } from '@/components/ui/Loading'
+import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
-import { downloadUrl } from '@/lib/download'
+import { downloadBlob, downloadUrl } from '@/lib/download'
+import { EXPORT_FORMATS, exportForPlatform, formatFileSize } from '@/lib/export-formats'
+import { FRAME_CATEGORIES, STICKER_FRAMES, applyFrameToImage } from '@/lib/frame-templates'
+import { ANIMATION_PRESETS, createAnimatedGif } from '@/lib/gif-encoder'
+import { FILTER_CATEGORIES, IMAGE_FILTERS, applyFilterToImage } from '@/lib/image-filters'
+import { smartCrop } from '@/lib/smart-crop'
 import {
-  ChevronDown,
-  ChevronUp,
-  Download,
-  GripVertical,
-  Instagram,
-  Layers,
-  LayoutTemplate,
-  Monitor,
-  Plus,
-  Settings,
-  Smartphone,
-  Square, Trash2,
-  Twitter,
-  Type,
-  UploadCloud,
-  ZoomIn, ZoomOut
+    ChevronDown,
+    ChevronUp,
+    Download,
+    Frame,
+    GripVertical,
+    Instagram,
+    Layers,
+    LayoutTemplate,
+    LoaderCircle as Loader2,
+    Monitor,
+    Palette,
+    Plus,
+    Redo2,
+    Settings,
+    Share2,
+    Smartphone,
+    Square, Trash2,
+    Twitter,
+    Type,
+    Undo2,
+    UploadCloud,
+    Wand2,
+    ZoomIn, ZoomOut,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -39,6 +51,22 @@ const OUTLINE_PRESETS = [
   { color: '#3B82F6', label: 'Blue' },
   { color: '#8B5CF6', label: 'Purple' },
   { color: '#EC4899', label: 'Pink' },
+]
+
+interface GradientPreset {
+  id: string
+  label: string
+  colors: [string, string]
+  css: string
+}
+
+const OUTLINE_GRADIENTS: GradientPreset[] = [
+  { id: 'sunset', label: 'Sunset', colors: ['#FF6B4A', '#F59E0B'], css: 'linear-gradient(135deg, #FF6B4A, #F59E0B)' },
+  { id: 'ocean', label: 'Ocean', colors: ['#3B82F6', '#10B981'], css: 'linear-gradient(135deg, #3B82F6, #10B981)' },
+  { id: 'berry', label: 'Berry', colors: ['#8B5CF6', '#EC4899'], css: 'linear-gradient(135deg, #8B5CF6, #EC4899)' },
+  { id: 'neon', label: 'Neon', colors: ['#39ff14', '#00e5ff'], css: 'linear-gradient(135deg, #39ff14, #00e5ff)' },
+  { id: 'fire', label: 'Fire', colors: ['#FF6B4A', '#dc2626'], css: 'linear-gradient(135deg, #FF6B4A, #dc2626)' },
+  { id: 'gold', label: 'Gold', colors: ['#F59E0B', '#d97706'], css: 'linear-gradient(135deg, #F59E0B, #d97706)' },
 ]
 
 const CANVAS_SIZES = [
@@ -205,7 +233,7 @@ const TEMPLATE_CATEGORIES = {
 }
 
 type LeftTab = 'canvas' | 'layers' | 'settings'
-type RightTab = 'border' | 'text' | 'templates'
+type RightTab = 'border' | 'text' | 'templates' | 'filters' | 'frames' | 'export'
 type TemplateCategory = keyof typeof TEMPLATE_CATEGORIES
 
 const LEFT_TABS = [
@@ -217,17 +245,20 @@ const LEFT_TABS = [
 const RIGHT_TABS = [
   { key: 'border' as RightTab, icon: Square, label: 'Border' },
   { key: 'text' as RightTab, icon: Type, label: 'Text' },
+  { key: 'filters' as RightTab, icon: Palette, label: 'Filters' },
+  { key: 'frames' as RightTab, icon: Frame, label: 'Frames' },
   { key: 'templates' as RightTab, icon: LayoutTemplate, label: 'Assets' },
+  { key: 'export' as RightTab, icon: Share2, label: 'Export' },
 ]
 
 // ─── UI Helpers (module-level to prevent remount) ──────────
 function PanelLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-2 block">{children}</label>
+  return <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">{children}</label>
 }
 
 function PanelSection({ title, children }: { title: string, children: React.ReactNode }) {
   return (
-    <div className="border-b border-white/4 pb-4 mb-4 last:border-0 last:mb-0 last:pb-0">
+    <div className="border-b border-[var(--overlay-border)] pb-4 mb-4 last:border-0 last:mb-0 last:pb-0">
       <PanelLabel>{title}</PanelLabel>
       {children}
     </div>
@@ -267,6 +298,7 @@ export default function MakerPage() {
   const [outlineWidth, setOutlineWidth] = useState(15)
   const [shadowBlur, setShadowBlur] = useState(15)
   const [outlineColor, setOutlineColor] = useState('#ffffff')
+  const [outlineGradient, setOutlineGradient] = useState<GradientPreset | null>(null)
 
   // Text controls
   const [stickerText, setStickerText] = useState('')
@@ -275,6 +307,19 @@ export default function MakerPage() {
   const [fontFamily, setFontFamily] = useState('Impact')
   const [fontSize, setFontSize] = useState(60)
   const [textStrokeWidth, setTextStrokeWidth] = useState(2)
+
+  // Filter & frame state
+  const [activeFilter, setActiveFilter] = useState('none')
+  const [activeFilterCategory, setActiveFilterCategory] = useState<string>('color')
+  const [activeFrame, setActiveFrame] = useState('none')
+  const [activeFrameCategory, setActiveFrameCategory] = useState<string>('basic')
+  const [frameBorderWidth, setFrameBorderWidth] = useState(4)
+  const [isApplyingFilter, setIsApplyingFilter] = useState(false)
+  const [isUpscaling, setIsUpscaling] = useState(false)
+  const [isExportingPlatform, setIsExportingPlatform] = useState(false)
+  const [selectedAnimation, setSelectedAnimation] = useState('bounce')
+  const [isExportingGif, setIsExportingGif] = useState(false)
+  const [isSmartCropping, setIsSmartCropping] = useState(false)
 
   // ─── Selected text syncing ──────────────────────────────
   const selectedElement = elements.find(e => e.id === selectedId)
@@ -302,7 +347,7 @@ export default function MakerPage() {
 
   // ─── generateOutline ────────────────────────────────────
   const generateOutline = useCallback(async (
-    imageUrl: string, width: number, blur: number, color: string
+    imageUrl: string, width: number, blur: number, color: string, gradient?: GradientPreset | null
   ) => {
     return new Promise<string>((resolve, reject) => {
       const img = new Image()
@@ -323,7 +368,14 @@ export default function MakerPage() {
         if (!silCtx) return reject('No 2d context')
         silCtx.drawImage(img, 0, 0)
         silCtx.globalCompositeOperation = 'source-in'
-        silCtx.fillStyle = color
+        if (gradient) {
+          const grad = silCtx.createLinearGradient(0, 0, silCanvas.width, silCanvas.height)
+          grad.addColorStop(0, gradient.colors[0])
+          grad.addColorStop(1, gradient.colors[1])
+          silCtx.fillStyle = grad
+        } else {
+          silCtx.fillStyle = color
+        }
         silCtx.fillRect(0, 0, silCanvas.width, silCanvas.height)
         const outCanvas = document.createElement('canvas')
         outCanvas.width = canvas.width
@@ -360,26 +412,47 @@ export default function MakerPage() {
     if (!processedUrl) return
     let isMounted = true
     setIsProcessingCanvas(true)
-    generateOutline(processedUrl, outlineWidth, shadowBlur, outlineColor)
+    generateOutline(processedUrl, outlineWidth, shadowBlur, outlineColor, outlineGradient)
       .then(url => {
-        if (isMounted) {
+        if (!isMounted) return
+        // Load image to get natural dimensions for proper centering
+        const img = new Image()
+        img.onload = () => {
+          if (!isMounted) return
+          const imgW = img.naturalWidth
+          const imgH = img.naturalHeight
+          // Fit to ~80% of canvas, preserving aspect ratio
+          const padding = 0.8
+          const maxW = canvasW * padding
+          const maxH = canvasH * padding
+          const scale = Math.min(maxW / imgW, maxH / imgH, 1)
+          const fitW = imgW * scale
+          const fitH = imgH * scale
+          // Center on canvas
+          const cx = (canvasW - fitW) / 2
+          const cy = (canvasH - fitH) / 2
+
           setElements(prev => {
             const existing = prev.find(e => e.type === 'main-sticker')
             if (existing) {
               return prev.map(e => e.type === 'main-sticker' ? { ...e, src: url } : e)
             } else {
-              return [{ id: 'main-sticker', type: 'main-sticker', src: url, x: 100, y: 100 }, ...prev]
+              return [{ id: 'main-sticker', type: 'main-sticker' as const, src: url, x: cx, y: cy, width: fitW, height: fitH }, ...prev]
             }
           })
+          setIsProcessingCanvas(false)
         }
+        img.onerror = () => {
+          if (isMounted) { setError('Failed to load processed image'); setIsProcessingCanvas(false) }
+        }
+        img.src = url
       })
       .catch(err => {
         console.error("Canvas error:", err)
-        if (isMounted) setError("Failed to generate sticker outline")
+        if (isMounted) { setError("Failed to generate sticker outline"); setIsProcessingCanvas(false) }
       })
-      .finally(() => { if (isMounted) setIsProcessingCanvas(false) })
     return () => { isMounted = false }
-  }, [processedUrl, outlineWidth, shadowBlur, outlineColor, generateOutline])
+  }, [processedUrl, outlineWidth, shadowBlur, outlineColor, outlineGradient, generateOutline, canvasW, canvasH])
 
   // ─── onDrop ─────────────────────────────────────────────
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -420,17 +493,51 @@ export default function MakerPage() {
         }
         reader.onerror = error => reject(error)
       })
-      const response = await fetch('/api/remove-bg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: base64 })
-      })
-      if (!response.ok) {
-        const errData = await response.json()
-        throw new Error(errData.error || 'Failed to remove background')
+      // Try client-side background removal first (free, no API key needed)
+      let bgRemoved = false
+      try {
+        const { removeBackground } = await import('@imgly/background-removal')
+        const imgBlob = await fetch(base64).then(r => r.blob())
+        const resultBlob = await removeBackground(imgBlob, {
+          progress: (key: string, current: number, total: number) => {
+            if (key === 'compute:inference') {
+              const pct = Math.round((current / total) * 100)
+              console.log(`[bg-removal] Processing: ${pct}%`)
+            }
+          },
+        })
+        const reader2 = new FileReader()
+        const resultUrl = await new Promise<string>((resolve) => {
+          reader2.onload = () => resolve(reader2.result as string)
+          reader2.readAsDataURL(resultBlob)
+        })
+        setProcessedUrl(resultUrl)
+        bgRemoved = true
+      } catch (clientErr) {
+        console.warn('[bg-removal] Client-side failed, trying API fallback...', clientErr)
       }
-      const resultData = await response.json()
-      setProcessedUrl(resultData.url)
+
+      // Fallback to server API if client-side failed
+      if (!bgRemoved) {
+        try {
+          const response = await fetch('/api/remove-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: base64 })
+          })
+          if (!response.ok) {
+            const errData = await response.json()
+            throw new Error(errData.error || 'Failed to remove background')
+          }
+          const resultData = await response.json()
+          setProcessedUrl(resultData.url)
+        } catch (apiErr: any) {
+          console.warn('[bg-removal] API fallback also failed:', apiErr.message)
+          // Use original image if both methods fail
+          setProcessedUrl(objectUrl)
+          toast('Background removal unavailable — using original image', 'info')
+        }
+      }
     } catch (err: any) {
       console.error(err)
       const msg = err.message || 'An unexpected error occurred.'
@@ -518,6 +625,133 @@ export default function MakerPage() {
 
   const handleReset = () => {
     setFile(null); setOriginalUrl(null); setProcessedUrl(null); setElements([]); setError(null)
+    setActiveFilter('none'); setActiveFrame('none')
+  }
+
+  // ─── Filter handler ─────────────────────────────────────
+  const handleApplyFilter = async (filterId: string) => {
+    if (!processedUrl || isApplyingFilter) return
+    setActiveFilter(filterId)
+    if (filterId === 'none') return
+    setIsApplyingFilter(true)
+    try {
+      const filteredUrl = await applyFilterToImage(processedUrl, filterId)
+      setElements(prev => prev.map(e =>
+        e.type === 'main-sticker' ? { ...e, src: filteredUrl } : e
+      ))
+      toast(`Filter "${IMAGE_FILTERS.find(f => f.id === filterId)?.label}" applied`, 'success')
+    } catch (err) {
+      console.error('Filter error:', err)
+      toast('Failed to apply filter', 'error')
+    } finally {
+      setIsApplyingFilter(false)
+    }
+  }
+
+  // ─── Frame handler ──────────────────────────────────────
+  const handleApplyFrame = async (frameId: string) => {
+    if (!processedUrl) return
+    setActiveFrame(frameId)
+    if (frameId === 'none') return
+    try {
+      const framedUrl = await applyFrameToImage(processedUrl, frameId, outlineColor, frameBorderWidth)
+      setElements(prev => prev.map(e =>
+        e.type === 'main-sticker' ? { ...e, src: framedUrl } : e
+      ))
+      toast(`Frame "${STICKER_FRAMES.find(f => f.id === frameId)?.label}" applied`, 'success')
+    } catch (err) {
+      console.error('Frame error:', err)
+      toast('Failed to apply frame', 'error')
+    }
+  }
+
+  // ─── AI Upscale handler ─────────────────────────────────
+  const handleUpscale = async () => {
+    if (!processedUrl || isUpscaling) return
+    setIsUpscaling(true)
+    try {
+      const base64 = processedUrl.startsWith('data:')
+        ? processedUrl.split(',')[1]
+        : await fetch(processedUrl).then(r => r.arrayBuffer()).then(b => btoa(String.fromCharCode(...new Uint8Array(b))))
+      const mimeType = processedUrl.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
+      
+      const res = await fetch('/api/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType, scale: 2 }),
+      })
+      if (!res.ok) throw new Error('Upscale failed')
+      const data = await res.json()
+      const upscaledUrl = `data:${data.mimeType};base64,${data.imageBase64}`
+      setProcessedUrl(upscaledUrl)
+      toast('Image upscaled! ✨', 'success')
+    } catch (err) {
+      console.error('Upscale error:', err)
+      toast('Upscaling failed. AI service may be unavailable.', 'error')
+    } finally {
+      setIsUpscaling(false)
+    }
+  }
+
+  // ─── GIF export handler ─────────────────────────────────
+  const handleGifExport = async () => {
+    const mainSticker = elements.find(e => e.type === 'main-sticker')
+    if (!mainSticker?.src) {
+      toast('No sticker to animate', 'error')
+      return
+    }
+    setIsExportingGif(true)
+    try {
+      const blob = await createAnimatedGif(mainSticker.src, selectedAnimation, canvasW)
+      downloadBlob(blob, `sticker_${selectedAnimation}.gif`)
+      toast('Animated GIF exported!', 'success')
+    } catch (err) {
+      console.error('GIF export error:', err)
+      toast('GIF export failed', 'error')
+    } finally {
+      setIsExportingGif(false)
+    }
+  }
+
+  // ─── Smart crop handler ─────────────────────────────────
+  const handleSmartCrop = async () => {
+    if (!processedUrl || isSmartCropping) return
+    setIsSmartCropping(true)
+    try {
+      const result = await smartCrop(processedUrl, { padding: 20, square: true })
+      setProcessedUrl(result.dataUrl)
+      setElements(prev => prev.map(e =>
+        e.type === 'main-sticker' ? { ...e, src: result.dataUrl } : e
+      ))
+      toast(`Smart cropped (${result.cropRect.w}×${result.cropRect.h})`, 'success')
+    } catch (err) {
+      console.error('Smart crop error:', err)
+      toast('Smart crop failed', 'error')
+    } finally {
+      setIsSmartCropping(false)
+    }
+  }
+
+  // ─── Platform export handler ────────────────────────────
+  const handlePlatformExport = async (formatId: string) => {
+    const mainSticker = elements.find(e => e.type === 'main-sticker')
+    if (!mainSticker?.src) {
+      toast('No sticker to export', 'error')
+      return
+    }
+    setIsExportingPlatform(true)
+    try {
+      const result = await exportForPlatform(mainSticker.src, formatId, 'sticker')
+      downloadBlob(result.blob, result.filename)
+      const sizeStr = formatFileSize(result.fileSize)
+      const statusMsg = result.withinLimits ? '✅' : '⚠️ Over size limit'
+      toast(`Exported for ${result.format.label} (${sizeStr}) ${statusMsg}`, result.withinLimits ? 'success' : 'info')
+    } catch (err) {
+      console.error('Platform export error:', err)
+      toast('Export failed', 'error')
+    } finally {
+      setIsExportingPlatform(false)
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -531,18 +765,18 @@ export default function MakerPage() {
           className={`w-full max-w-3xl aspect-[4/3] rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
             isDragActive
               ? 'border-[#FF6B4A] bg-[#FF6B4A]/5 scale-[1.01]'
-              : 'border-white/6 hover:border-white/12 hover:bg-white/2'
+              : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] hover:bg-[var(--card-bg)]'
           }`}
         >
           <input {...getInputProps()} />
-          <div className="w-16 h-16 rounded-2xl bg-white/4 flex items-center justify-center mb-6">
-            <UploadCloud className="w-7 h-7 text-stone-500" />
+          <div className="w-16 h-16 rounded-2xl bg-[var(--card-bg-hover)] flex items-center justify-center mb-6">
+            <UploadCloud className="w-7 h-7 text-[var(--text-tertiary)]" />
           </div>
-          <p className="text-lg font-semibold text-stone-300 mb-1">
+          <p className="text-lg font-semibold text-[var(--text-secondary)] mb-1">
             {isDragActive ? 'Drop your image here' : 'Drop an image to start'}
           </p>
-          <p className="text-sm text-stone-600">PNG, JPG, or WebP • Max 5MB</p>
-          <button className="mt-6 px-6 py-2.5 rounded-xl bg-white/6 text-sm font-semibold text-stone-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer">
+          <p className="text-sm text-[var(--text-muted)]">PNG, JPG, or WebP • Max 5MB</p>
+          <button className="mt-6 px-6 py-2.5 rounded-xl bg-[var(--card-bg-hover)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-white/10 hover:text-white transition-all cursor-pointer">
             Browse Files
           </button>
         </div>
@@ -562,9 +796,9 @@ export default function MakerPage() {
       )}
 
       {/* ════════ LEFT PANEL ════════ */}
-      <div className="w-[280px]  shrink-0 bg-[#141210] border-r border-white/4 flex flex-col overflow-hidden">
+      <div className="hidden md:flex w-[280px] shrink-0 bg-[var(--panel-bg)] border-r border-[var(--overlay-border)] flex-col overflow-hidden">
         {/* Tab strip */}
-        <div className="flex border-b border-white/4">
+        <div className="flex border-b border-[var(--overlay-border)]">
           {LEFT_TABS.map(tab => (
             <button
               key={tab.key}
@@ -572,7 +806,7 @@ export default function MakerPage() {
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-semibold transition-all cursor-pointer ${
                 leftTab === tab.key
                   ? 'text-[#FF6B4A] bg-[#FF6B4A]/5 border-b-2 border-[#FF6B4A]'
-                  : 'text-stone-600 hover:text-stone-400 hover:bg-white/2'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--card-bg)]'
               }`}
             >
               <tab.icon className="w-4 h-4" strokeWidth={leftTab === tab.key ? 2.2 : 1.5} />
@@ -595,7 +829,7 @@ export default function MakerPage() {
                       className={`py-2 px-3 rounded-lg text-[11px] font-semibold text-left transition-all cursor-pointer ${
                         canvasW === size.w && canvasH === size.h
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-white/2 text-stone-500 border border-white/4 hover:bg-white/4 hover:text-stone-300'
+                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
                       }`}
                     >
                       {size.label}
@@ -604,24 +838,35 @@ export default function MakerPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-3">
                   <div>
-                    <label className="text-[10px] text-stone-600 block mb-1">Width</label>
-                    <input type="number" value={canvasW} onChange={e => setCanvasW(Number(e.target.value))} className="w-full px-2 py-1.5 bg-white/3 border border-white/6 rounded-lg text-xs text-stone-300 focus:border-[#FF6B4A]/30 focus:outline-none" />
+                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Width</label>
+                    <input type="number" value={canvasW} onChange={e => setCanvasW(Number(e.target.value))} className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:border-[#FF6B4A]/30 focus:outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-stone-600 block mb-1">Height</label>
-                    <input type="number" value={canvasH} onChange={e => setCanvasH(Number(e.target.value))} className="w-full px-2 py-1.5 bg-white/3 border border-white/6 rounded-lg text-xs text-stone-300 focus:border-[#FF6B4A]/30 focus:outline-none" />
+                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Height</label>
+                    <input type="number" value={canvasH} onChange={e => setCanvasH(Number(e.target.value))} className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:border-[#FF6B4A]/30 focus:outline-none" />
                   </div>
                 </div>
               </PanelSection>
 
               <PanelSection title="Zoom">
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-8 h-8 rounded-lg bg-white/3 flex items-center justify-center text-stone-500 hover:text-white hover:bg-white/6 transition-colors cursor-pointer"><ZoomOut className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer"><ZoomOut className="w-3.5 h-3.5" /></button>
                   <div className="flex-1 relative">
                     <input type="range" min="25" max="200" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full" style={{ background: `linear-gradient(to right, #FF6B4A ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.06) ${((zoom - 25) / 175) * 100}%)` }} />
                   </div>
-                  <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="w-8 h-8 rounded-lg bg-white/3 flex items-center justify-center text-stone-500 hover:text-white hover:bg-white/6 transition-colors cursor-pointer"><ZoomIn className="w-3.5 h-3.5" /></button>
-                  <span className="text-[11px] text-stone-500 font-mono w-10 text-right">{zoom}%</span>
+                  <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer"><ZoomIn className="w-3.5 h-3.5" /></button>
+                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-10 text-right">{zoom}%</span>
+                </div>
+              </PanelSection>
+
+              <PanelSection title="Undo / Redo">
+                <div className="flex gap-2">
+                  <button onClick={() => { /* undo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer text-[11px] font-semibold">
+                    <Undo2 className="w-3.5 h-3.5" /> Undo
+                  </button>
+                  <button onClick={() => { /* redo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer text-[11px] font-semibold">
+                    <Redo2 className="w-3.5 h-3.5" /> Redo
+                  </button>
                 </div>
               </PanelSection>
 
@@ -643,7 +888,7 @@ export default function MakerPage() {
           {leftTab === 'layers' && (
             <div className="space-y-1">
               {elements.length === 0 ? (
-                <p className="text-xs text-stone-700 text-center py-8">No elements on canvas</p>
+                <p className="text-xs text-[var(--text-muted)] text-center py-8">No elements on canvas</p>
               ) : (
                 elements.slice().reverse().map((el, visualIdx) => {
                   const realIdx = elements.length - 1 - visualIdx
@@ -677,16 +922,16 @@ export default function MakerPage() {
                         onClick={() => setSelectedId(el.id)}
                         className={`flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-grab active:cursor-grabbing transition-all group ${
                           selectedId === el.id
-                            ? 'bg-[#FF6B4A]/10 border border-[#FF6B4A]/20 text-stone-200'
-                            : 'bg-white/2 border border-transparent text-stone-500 hover:bg-white/4 hover:text-stone-300'
+                            ? 'bg-[#FF6B4A]/10 border border-[#FF6B4A]/20 text-[var(--text-primary)]'
+                            : 'bg-[var(--card-bg)] border border-transparent text-[var(--text-tertiary)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
                         }`}
                       >
-                        <GripVertical className="w-3 h-3 text-stone-700 shrink-0" />
+                        <GripVertical className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
                         <span className="text-xs font-medium flex-1 truncate">{getElementLabel(el)}</span>
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'up') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/6 cursor-pointer"><ChevronUp className="w-3 h-3" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'down') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/6 cursor-pointer"><ChevronDown className="w-3 h-3" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); duplicateElement(el.id) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/6 cursor-pointer"><Plus className="w-3 h-3" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'up') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--card-bg-hover)] cursor-pointer"><ChevronUp className="w-3 h-3" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'down') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--card-bg-hover)] cursor-pointer"><ChevronDown className="w-3 h-3" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); duplicateElement(el.id) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--card-bg-hover)] cursor-pointer"><Plus className="w-3 h-3" /></button>
                           <button onClick={(e) => { e.stopPropagation(); deleteElement(el.id) }} className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:bg-red-400/10 cursor-pointer"><Trash2 className="w-3 h-3" /></button>
                         </div>
                       </div>
@@ -711,7 +956,7 @@ export default function MakerPage() {
                       key={fmt}
                       onClick={() => setExportFormat(fmt)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase transition-all cursor-pointer ${
-                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-white/3 text-stone-600 hover:bg-white/6 hover:text-stone-300'
+                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
                       }`}
                     >
                       {fmt}
@@ -724,16 +969,16 @@ export default function MakerPage() {
                 <PanelSection title="Quality">
                   <div className="flex items-center gap-3">
                     <input type="range" min="10" max="100" value={exportQuality} onChange={e => setExportQuality(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${exportQuality}%, rgba(255,255,255,0.06) ${exportQuality}%)` }} />
-                    <span className="text-xs text-stone-500 font-mono w-8 text-right">{exportQuality}%</span>
+                    <span className="text-xs text-[var(--text-tertiary)] font-mono w-8 text-right">{exportQuality}%</span>
                   </div>
                 </PanelSection>
               )}
 
               <PanelSection title="Canvas Info">
-                <div className="space-y-1.5 text-xs text-stone-600">
-                  <div className="flex justify-between"><span>Size</span><span className="text-stone-400">{canvasW}×{canvasH}</span></div>
-                  <div className="flex justify-between"><span>Elements</span><span className="text-stone-400">{elements.length}</span></div>
-                  <div className="flex justify-between"><span>Zoom</span><span className="text-stone-400">{zoom}%</span></div>
+                <div className="space-y-1.5 text-xs text-[var(--text-muted)]">
+                  <div className="flex justify-between"><span>Size</span><span className="text-[var(--text-secondary)]">{canvasW}×{canvasH}</span></div>
+                  <div className="flex justify-between"><span>Elements</span><span className="text-[var(--text-secondary)]">{elements.length}</span></div>
+                  <div className="flex justify-between"><span>Zoom</span><span className="text-[var(--text-secondary)]">{zoom}%</span></div>
                 </div>
               </PanelSection>
 
@@ -748,8 +993,8 @@ export default function MakerPage() {
       {/* ════════ CENTER: CANVAS ════════ */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="shrink-0 h-11 border-b border-white/4 bg-[#0C0A09]/90 backdrop-blur-sm flex items-center justify-between px-4">
-          <div className="flex items-center gap-2 text-xs text-stone-600">
+        <div className="shrink-0 h-11 border-b border-[var(--overlay-border)] bg-[var(--background)]/90 backdrop-blur-sm flex items-center justify-between px-4">
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
             <span className="font-mono">{canvasW}×{canvasH}</span>
             <span>•</span>
             <span>{elements.length} elements</span>
@@ -762,7 +1007,7 @@ export default function MakerPage() {
         </div>
 
         {/* Canvas */}
-        <div className="flex-1 relative bg-[repeating-conic-gradient(#151311_0%_25%,#0f0d0c_0%_50%)] bg-size-[24px_24px] overflow-auto">
+        <div className="flex-1 relative bg-[var(--canvas-bg)] overflow-auto pb-20 md:pb-0">
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loading text="Removing background..." size="lg" />
@@ -788,9 +1033,9 @@ export default function MakerPage() {
       </div>
 
       {/* ════════ RIGHT PANEL ════════ */}
-      <div className="w-[280px] shrink-0 bg-[#141210] border-l border-white/4 flex flex-col overflow-hidden">
+      <div className="hidden lg:flex w-[280px] shrink-0 bg-[var(--panel-bg)] border-l border-[var(--overlay-border)] flex-col overflow-hidden">
         {/* Tab strip */}
-        <div className="flex border-b border-white/4">
+        <div className="flex border-b border-[var(--overlay-border)]">
           {RIGHT_TABS.map(tab => (
             <button
               key={tab.key}
@@ -798,7 +1043,7 @@ export default function MakerPage() {
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-semibold transition-all cursor-pointer ${
                 rightTab === tab.key
                   ? 'text-[#FF6B4A] bg-[#FF6B4A]/5 border-b-2 border-[#FF6B4A]'
-                  : 'text-stone-600 hover:text-stone-400 hover:bg-white/2'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--card-bg)]'
               }`}
             >
               <tab.icon className="w-4 h-4" strokeWidth={rightTab === tab.key ? 2.2 : 1.5} />
@@ -817,9 +1062,9 @@ export default function MakerPage() {
                   {OUTLINE_PRESETS.map(p => (
                     <button
                       key={p.color}
-                      onClick={() => setOutlineColor(p.color)}
+                      onClick={() => { setOutlineColor(p.color); setOutlineGradient(null) }}
                       className={`w-full aspect-square rounded-lg border-2 transition-all cursor-pointer ${
-                        outlineColor === p.color ? 'border-[#FF6B4A] scale-110' : 'border-white/6 hover:border-white/15'
+                        outlineColor === p.color && !outlineGradient ? 'border-[#FF6B4A] scale-110' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)]'
                       }`}
                       style={{ backgroundColor: p.color }}
                       title={p.label}
@@ -827,36 +1072,60 @@ export default function MakerPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={outlineColor} onChange={(e) => setOutlineColor(e.target.value)} className="w-8 h-8 rounded-lg cursor-pointer border border-white/6" />
+                  <input type="color" value={outlineColor} onChange={(e) => { setOutlineColor(e.target.value); setOutlineGradient(null) }} className="w-8 h-8 rounded-lg cursor-pointer border border-[var(--overlay-border)]" />
                   <input
                     type="text"
-                    value={outlineColor}
-                    onChange={(e) => setOutlineColor(e.target.value)}
-                    className="flex-1 px-2 py-1.5 bg-white/3 border border-white/6 rounded-lg text-xs text-stone-300 font-mono uppercase focus:border-[#FF6B4A]/30 focus:outline-none"
+                    value={outlineGradient ? outlineGradient.label : outlineColor}
+                    onChange={(e) => { setOutlineColor(e.target.value); setOutlineGradient(null) }}
+                    className="flex-1 px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-xs text-[var(--text-secondary)] font-mono uppercase focus:border-[#FF6B4A]/30 focus:outline-none"
                   />
                 </div>
+              </PanelSection>
+
+              <PanelSection title="Gradient Border">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {OUTLINE_GRADIENTS.map(g => (
+                    <button
+                      key={g.id}
+                      onClick={() => setOutlineGradient(g)}
+                      className={`h-9 rounded-lg border-2 transition-all cursor-pointer ${
+                        outlineGradient?.id === g.id ? 'border-[#FF6B4A] scale-105' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)]'
+                      }`}
+                      style={{ background: g.css }}
+                      title={g.label}
+                    />
+                  ))}
+                </div>
+                {outlineGradient && (
+                  <button
+                    onClick={() => setOutlineGradient(null)}
+                    className="mt-2 w-full py-1.5 rounded-lg bg-[var(--input-bg)] text-[10px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer"
+                  >
+                    Clear Gradient
+                  </button>
+                )}
               </PanelSection>
 
               <PanelSection title="Outline Width">
                 <div className="flex items-center gap-3">
                   <input type="range" min="0" max="50" value={outlineWidth} onChange={(e) => setOutlineWidth(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${outlineWidth * 2}%, rgba(255,255,255,0.06) ${outlineWidth * 2}%)` }} />
-                  <span className="text-[11px] text-stone-500 font-mono w-8 text-right">{outlineWidth}px</span>
+                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-8 text-right">{outlineWidth}px</span>
                 </div>
               </PanelSection>
 
               <PanelSection title="Shadow Blur">
                 <div className="flex items-center gap-3">
                   <input type="range" min="0" max="50" value={shadowBlur} onChange={(e) => setShadowBlur(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${shadowBlur * 2}%, rgba(255,255,255,0.06) ${shadowBlur * 2}%)` }} />
-                  <span className="text-[11px] text-stone-500 font-mono w-8 text-right">{shadowBlur}px</span>
+                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-8 text-right">{shadowBlur}px</span>
                 </div>
               </PanelSection>
 
               <PanelSection title="Quick Styles">
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button onClick={() => { setOutlineColor('#ffffff'); setOutlineWidth(15); setShadowBlur(15) }} className="py-2 rounded-lg bg-white/3 text-[11px] font-semibold text-stone-400 hover:bg-white/6 transition-all cursor-pointer">Classic</button>
-                  <button onClick={() => { setOutlineColor('#000000'); setOutlineWidth(8); setShadowBlur(0) }} className="py-2 rounded-lg bg-white/3 text-[11px] font-semibold text-stone-400 hover:bg-white/6 transition-all cursor-pointer">Minimal</button>
-                  <button onClick={() => { setOutlineColor('#FF6B4A'); setOutlineWidth(20); setShadowBlur(25) }} className="py-2 rounded-lg bg-white/3 text-[11px] font-semibold text-stone-400 hover:bg-white/6 transition-all cursor-pointer">Bold</button>
-                  <button onClick={() => { setOutlineColor('#ffffff'); setOutlineWidth(0); setShadowBlur(30) }} className="py-2 rounded-lg bg-white/3 text-[11px] font-semibold text-stone-400 hover:bg-white/6 transition-all cursor-pointer">Glow</button>
+                  <button onClick={() => { setOutlineColor('#ffffff'); setOutlineWidth(15); setShadowBlur(15); setOutlineGradient(null) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">Classic</button>
+                  <button onClick={() => { setOutlineColor('#000000'); setOutlineWidth(8); setShadowBlur(0); setOutlineGradient(null) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">Minimal</button>
+                  <button onClick={() => { setOutlineGradient(OUTLINE_GRADIENTS[0]); setOutlineWidth(20); setShadowBlur(10) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">🌅 Sunset</button>
+                  <button onClick={() => { setOutlineGradient(OUTLINE_GRADIENTS[3]); setOutlineWidth(18); setShadowBlur(15) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">⚡ Neon</button>
                 </div>
               </PanelSection>
             </div>
@@ -880,7 +1149,7 @@ export default function MakerPage() {
                   value={stickerText}
                   onChange={(e) => setStickerText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
-                  className="w-full px-3 py-2.5 border border-white/6 rounded-xl bg-white/3 text-stone-200 placeholder:text-stone-700 focus:border-[#FF6B4A]/30 focus:outline-none text-sm"
+                  className="w-full px-3 py-2.5 border border-[var(--overlay-border)] rounded-xl bg-[var(--input-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#FF6B4A]/30 focus:outline-none text-sm"
                 />
                 <Button onClick={handleAddText} className="w-full mt-2" size="sm" disabled={!stickerText}>
                   <Plus className="w-4 h-4" /> Add to Canvas
@@ -896,10 +1165,10 @@ export default function MakerPage() {
                       className={`py-2 px-2 rounded-lg text-left transition-all cursor-pointer ${
                         fontFamily === f.value
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-white/2 text-stone-500 border border-white/4 hover:bg-white/4 hover:text-stone-300'
+                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
                       }`}
                     >
-                      <span className="text-[10px] block text-stone-600">{f.label}</span>
+                      <span className="text-[10px] block text-[var(--text-muted)]">{f.label}</span>
                       <span className="text-sm font-bold" style={{ fontFamily: f.value }}>{f.sample}</span>
                     </button>
                   ))}
@@ -909,17 +1178,17 @@ export default function MakerPage() {
               <PanelSection title="Size & Stroke">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-stone-600 block mb-1">Font Size</label>
+                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Font Size</label>
                     <div className="flex items-center gap-1">
                       <input type="range" min="16" max="120" value={fontSize} onChange={e => { const v = Number(e.target.value); setFontSize(v); if (isTextSelected) updateSelectedText({ fontSize: v }) }} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${((fontSize - 16) / 104) * 100}%, rgba(255,255,255,0.06) ${((fontSize - 16) / 104) * 100}%)` }} />
-                      <span className="text-[10px] text-stone-600 font-mono w-6 text-right">{fontSize}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-mono w-6 text-right">{fontSize}</span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-stone-600 block mb-1">Stroke Width</label>
+                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Stroke Width</label>
                     <div className="flex items-center gap-1">
                       <input type="range" min="0" max="10" value={textStrokeWidth} onChange={e => { const v = Number(e.target.value); setTextStrokeWidth(v); if (isTextSelected) updateSelectedText({ strokeWidth: v }) }} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${textStrokeWidth * 10}%, rgba(255,255,255,0.06) ${textStrokeWidth * 10}%)` }} />
-                      <span className="text-[10px] text-stone-600 font-mono w-4 text-right">{textStrokeWidth}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-mono w-4 text-right">{textStrokeWidth}</span>
                     </div>
                   </div>
                 </div>
@@ -928,17 +1197,17 @@ export default function MakerPage() {
               <PanelSection title="Colors">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-stone-600 block mb-1.5">Fill</label>
+                    <label className="text-[10px] text-[var(--text-muted)] block mb-1.5">Fill</label>
                     <div className="flex items-center gap-2">
-                      <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); if (isTextSelected) updateSelectedText({ fill: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-white/6" />
-                      <span className="text-[10px] uppercase text-stone-600 font-mono">{textColor}</span>
+                      <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); if (isTextSelected) updateSelectedText({ fill: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-[var(--overlay-border)]" />
+                      <span className="text-[10px] uppercase text-[var(--text-muted)] font-mono">{textColor}</span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-stone-600 block mb-1.5">Stroke</label>
+                    <label className="text-[10px] text-[var(--text-muted)] block mb-1.5">Stroke</label>
                     <div className="flex items-center gap-2">
-                      <input type="color" value={textOutlineColor} onChange={(e) => { setTextOutlineColor(e.target.value); if (isTextSelected) updateSelectedText({ stroke: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-white/6" />
-                      <span className="text-[10px] uppercase text-stone-600 font-mono">{textOutlineColor}</span>
+                      <input type="color" value={textOutlineColor} onChange={(e) => { setTextOutlineColor(e.target.value); if (isTextSelected) updateSelectedText({ stroke: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-[var(--overlay-border)]" />
+                      <span className="text-[10px] uppercase text-[var(--text-muted)] font-mono">{textOutlineColor}</span>
                     </div>
                   </div>
                 </div>
@@ -950,7 +1219,7 @@ export default function MakerPage() {
                     <button
                       key={preset.label}
                       onClick={() => handleAddTextPreset(preset)}
-                      className="py-2.5 px-3 rounded-lg bg-white/2 border border-white/4 text-left hover:bg-white/4 hover:border-white/8 transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-left hover:bg-[var(--card-bg-hover)] hover:border-[var(--overlay-border-hover)] transition-all cursor-pointer"
                     >
                       <span className="text-[11px] font-bold block" style={{ fontFamily: preset.font, color: preset.fill, textShadow: `1px 1px 0 ${preset.stroke}` }}>
                         {preset.label}
@@ -971,7 +1240,7 @@ export default function MakerPage() {
                     key={cat}
                     onClick={() => setActiveTemplateCategory(cat)}
                     className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                      activeTemplateCategory === cat ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'text-stone-600 hover:text-stone-400 hover:bg-white/3'
+                      activeTemplateCategory === cat ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
                     }`}
                   >
                     {TEMPLATE_CATEGORIES[cat].name}
@@ -982,13 +1251,207 @@ export default function MakerPage() {
                 {TEMPLATE_CATEGORIES[activeTemplateCategory].items.map((src, idx) => (
                   <div
                     key={idx}
-                    className="aspect-square bg-white/2 rounded-lg border border-white/4 flex items-center justify-center p-1 cursor-pointer hover:border-[#FF6B4A]/30 hover:bg-white/4 transition-all"
+                    className="aspect-square bg-[var(--card-bg)] rounded-lg border border-[var(--overlay-border)] flex items-center justify-center p-1 cursor-pointer hover:border-[#FF6B4A]/30 hover:bg-[var(--card-bg-hover)] transition-all"
                     onClick={() => handleAddTemplate(src)}
                   >
                     <img src={src} alt="" className="w-full h-full object-contain" loading="lazy" />
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ── FILTERS TAB ── */}
+          {rightTab === 'filters' && (
+            <div className="space-y-4">
+              {isApplyingFilter && (
+                <div className="rounded-lg bg-[#FF6B4A]/8 border border-[#FF6B4A]/15 px-3 py-2 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 text-[#FF6B4A] animate-spin" />
+                  <span className="text-[11px] text-[#FF6B4A]/80">Applying filter...</span>
+                </div>
+              )}
+
+              <PanelSection title="Category">
+                <div className="flex gap-1">
+                  {FILTER_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveFilterCategory(cat.id)}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        activeFilterCategory === cat.id
+                          ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
+                          : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
+                      }`}
+                    >
+                      {cat.emoji} {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </PanelSection>
+
+              <PanelSection title="Filters">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {IMAGE_FILTERS.filter(f => f.id === 'none' || f.category === activeFilterCategory).map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => handleApplyFilter(filter.id)}
+                      disabled={isApplyingFilter}
+                      className={`py-3 rounded-lg text-center transition-all cursor-pointer ${
+                        activeFilter === filter.id
+                          ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30'
+                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <span className="text-lg block mb-0.5">{filter.emoji}</span>
+                      <span className="text-[10px] font-medium">{filter.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </PanelSection>
+
+              <PanelSection title="AI Enhance">
+                <Button
+                  onClick={handleUpscale}
+                  disabled={!processedUrl || isUpscaling}
+                  className="w-full gap-2"
+                  size="sm"
+                >
+                  {isUpscaling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  {isUpscaling ? 'Upscaling...' : 'AI Upscale (2×)'}
+                </Button>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1.5">Enhance image quality using AI</p>
+              </PanelSection>
+            </div>
+          )}
+
+          {/* ── FRAMES TAB ── */}
+          {rightTab === 'frames' && (
+            <div className="space-y-4">
+              <PanelSection title="Category">
+                <div className="flex gap-1">
+                  {FRAME_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveFrameCategory(cat.id)}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        activeFrameCategory === cat.id
+                          ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
+                          : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
+                      }`}
+                    >
+                      {cat.emoji} {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </PanelSection>
+
+              <PanelSection title="Shape">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {STICKER_FRAMES.filter(f => f.id === 'none' || f.category === activeFrameCategory).map(frame => (
+                    <button
+                      key={frame.id}
+                      onClick={() => handleApplyFrame(frame.id)}
+                      className={`py-3 rounded-lg text-center transition-all cursor-pointer ${
+                        activeFrame === frame.id
+                          ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30'
+                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <span className="text-lg block mb-0.5">{frame.emoji}</span>
+                      <span className="text-[10px] font-medium">{frame.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </PanelSection>
+
+              <PanelSection title="Frame Border">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range" min="0" max="20" value={frameBorderWidth}
+                    onChange={e => setFrameBorderWidth(Number(e.target.value))}
+                    className="flex-1"
+                    style={{ background: `linear-gradient(to right, #FF6B4A ${frameBorderWidth * 5}%, rgba(255,255,255,0.06) ${frameBorderWidth * 5}%)` }}
+                  />
+                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-8 text-right">{frameBorderWidth}px</span>
+                </div>
+              </PanelSection>
+            </div>
+          )}
+
+          {/* ── EXPORT TAB ── */}
+          {rightTab === 'export' && (
+            <div className="space-y-4">
+              <PanelSection title="Platform Export">
+                <div className="space-y-1.5">
+                  {EXPORT_FORMATS.map(format => (
+                    <button
+                      key={format.id}
+                      onClick={() => handlePlatformExport(format.id)}
+                      disabled={isExportingPlatform || elements.length === 0}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-[var(--card-bg)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:border-[var(--overlay-border-hover)] transition-all cursor-pointer group text-left"
+                    >
+                      <span className="text-xl shrink-0">{format.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-semibold text-[var(--text-secondary)] group-hover:text-white block">{format.label}</span>
+                        <span className="text-[10px] text-[var(--text-muted)]">{format.description}</span>
+                      </div>
+                      {isExportingPlatform ? (
+                        <Loader2 className="w-4 h-4 text-[var(--text-muted)] animate-spin shrink-0" />
+                      ) : (
+                        <Download className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[#FF6B4A] shrink-0 transition-colors" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </PanelSection>
+
+              <PanelSection title="Animated GIF">
+                <div className="grid grid-cols-2 gap-1.5 mb-3">
+                  {ANIMATION_PRESETS.map(anim => (
+                    <button
+                      key={anim.id}
+                      onClick={() => setSelectedAnimation(anim.id)}
+                      className={`py-2 px-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        selectedAnimation === anim.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/30' : 'bg-[var(--input-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <span className="text-sm">{anim.emoji}</span>
+                      {anim.label}
+                    </button>
+                  ))}
+                </div>
+                <Button className="w-full" onClick={handleGifExport} disabled={elements.length === 0 || isExportingGif}>
+                  {isExportingGif ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {isExportingGif ? 'Encoding...' : 'Export as GIF'}
+                </Button>
+              </PanelSection>
+
+              <PanelSection title="Smart Crop">
+                <p className="text-[11px] text-[var(--text-muted)] mb-2">Auto-crop to the main subject with padding.</p>
+                <Button className="w-full" onClick={handleSmartCrop} disabled={!processedUrl || isSmartCropping}>
+                  {isSmartCropping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  {isSmartCropping ? 'Cropping...' : 'Smart Crop'}
+                </Button>
+              </PanelSection>
+
+              <PanelSection title="Standard Export">
+                <div className="flex gap-1 mb-2">
+                  {(['png', 'jpeg', 'webp'] as const).map(fmt => (
+                    <button
+                      key={fmt}
+                      onClick={() => setExportFormat(fmt)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase transition-all cursor-pointer ${
+                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+                <Button className="w-full" onClick={() => setExportAction('download')} disabled={elements.length === 0}>
+                  <Download className="w-4 h-4" /> Export Sticker
+                </Button>
+              </PanelSection>
             </div>
           )}
         </div>

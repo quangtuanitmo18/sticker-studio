@@ -28,8 +28,8 @@ export function Slider({
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between">
-        <label className="text-[11px] font-semibold uppercase tracking-wider text-stone-600">{label}</label>
-        <span className="text-[11px] text-stone-600 font-mono tabular-nums">{value}{unit}</span>
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</label>
+        <span className="text-[11px] text-[var(--text-muted)] font-mono tabular-nums">{value}{unit}</span>
       </div>
       <div className="relative group">
         <input

@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 interface ToggleGroupProps {
   label: string
@@ -13,8 +13,8 @@ interface ToggleGroupProps {
 export function ToggleGroup({ label, options, value, onChange, className }: ToggleGroupProps) {
   return (
     <div className={cn('space-y-2.5', className)}>
-      <label className="text-[11px] font-semibold uppercase tracking-wider text-stone-600 block">{label}</label>
-      <div className="flex rounded-xl bg-white/[0.03] border border-white/[0.04] p-1 gap-0.5">
+      <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] block">{label}</label>
+      <div className="flex rounded-xl bg-[var(--input-bg)] border border-[var(--overlay-border)] p-1 gap-0.5">
         {options.map((opt) => (
           <button
             key={opt.value}
@@ -23,7 +23,7 @@ export function ToggleGroup({ label, options, value, onChange, className }: Togg
               'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer',
               value === opt.value
                 ? 'bg-[#FF6B4A] text-white shadow-md shadow-[#FF6B4A]/20'
-                : 'text-stone-600 hover:text-stone-300 hover:bg-white/[0.03]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
             )}
           >
             {opt.emoji && <span className="text-sm">{opt.emoji}</span>}

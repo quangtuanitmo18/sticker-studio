@@ -1,12 +1,12 @@
 'use client'
 
-import * as React from 'react'
-import { useDropzone } from 'react-dropzone'
-import { UploadCloud, Image as ImageIcon, Download, Sparkles, Trash2, Loader2, ArrowRight, ArrowLeft, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Loading } from '@/components/ui/Loading'
+import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { downloadUrl } from '@/lib/download'
+import { ArrowLeft, ArrowRight, Check, Download, UploadCloud } from 'lucide-react'
+import * as React from 'react'
+import { useDropzone } from 'react-dropzone'
 
 function parseErrorMessage(err: any): string {
   const raw = typeof err === 'string' ? err : err?.message || 'Something went wrong'
@@ -138,7 +138,7 @@ export default function PackGenPage() {
   return (
     <div className="flex-1 flex flex-col">
       {/* ═══ Step indicator ═══ */}
-      <div className="shrink-0 flex items-center justify-center gap-2 py-5 px-6 border-b border-white/[0.04]">
+      <div className="shrink-0 flex items-center justify-center gap-2 py-4 md:py-5 px-4 md:px-6 border-b border-[var(--overlay-border)]">
         {STEPS.map((s, i) => (
           <React.Fragment key={s}>
             {i > 0 && <div className={`w-12 h-[1px] ${i <= step ? 'bg-[#FF6B4A]' : 'bg-white/[0.06]'} transition-colors`} />}
@@ -146,12 +146,12 @@ export default function PackGenPage() {
               onClick={() => { if (i < step || (i === 1 && sourceImage)) setStep(i) }}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 i === step ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]'
-                : i < step ? 'bg-white/[0.04] text-stone-400'
-                : 'text-stone-700'
+                : i < step ? 'bg-[var(--card-bg-hover)] text-[var(--text-secondary)]'
+                : 'text-[var(--text-muted)]'
               }`}
             >
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                i < step ? 'bg-[#FF6B4A] text-white' : i === step ? 'bg-[#FF6B4A]/20 text-[#FF6B4A]' : 'bg-white/[0.04] text-stone-700'
+                i < step ? 'bg-[#FF6B4A] text-white' : i === step ? 'bg-[#FF6B4A]/20 text-[#FF6B4A]' : 'bg-[var(--card-bg-hover)] text-[var(--text-muted)]'
               }`}>
                 {i < step ? <Check className="w-3 h-3" /> : i + 1}
               </span>
@@ -165,28 +165,28 @@ export default function PackGenPage() {
       <div className="flex-1 flex flex-col">
         {/* Step 0: Upload */}
         {step === 0 && (
-          <div className="flex-1 flex items-center justify-center p-6 animate-fade-in">
+          <div className="flex-1 flex items-center justify-center p-4 md:p-6 pb-24 md:pb-6 animate-fade-in">
             <div className="w-full max-w-2xl">
               <div className="text-center mb-8">
-                <h1 className="font-(--font-display) text-3xl md:text-4xl font-bold mb-3 text-stone-100">
+                <h1 className="font-(--font-display) text-3xl md:text-4xl font-bold mb-3 text-[var(--text-primary)]">
                   AI Sticker Pack
                 </h1>
-                <p className="text-stone-500 text-sm">Upload a clear selfie to generate 6 expressive reaction stickers</p>
+                <p className="text-[var(--text-tertiary)] text-sm">Upload a clear selfie to generate 6 expressive reaction stickers</p>
               </div>
               <div
                 {...getRootProps()}
                 className={`aspect-square max-w-md mx-auto rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
-                  isDragActive ? 'border-[#FF6B4A] bg-[#FF6B4A]/[0.03] scale-[1.01]' : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]'
+                  isDragActive ? 'border-[#FF6B4A] bg-[#FF6B4A]/[0.03] scale-[1.01]' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] hover:bg-[var(--card-bg)]'
                 }`}
               >
                 <input {...getInputProps()} />
-                <div className="w-16 h-16 rounded-2xl bg-white/[0.04] flex items-center justify-center mb-5">
-                  <UploadCloud className="w-7 h-7 text-stone-500" />
+                <div className="w-16 h-16 rounded-2xl bg-[var(--card-bg-hover)] flex items-center justify-center mb-5">
+                  <UploadCloud className="w-7 h-7 text-[var(--text-tertiary)]" />
                 </div>
-                <p className="text-base font-semibold text-stone-300 mb-1">
+                <p className="text-base font-semibold text-[var(--text-secondary)] mb-1">
                   {isDragActive ? 'Drop here' : 'Drop your photo'}
                 </p>
-                <p className="text-sm text-stone-600">or click to browse</p>
+                <p className="text-sm text-[var(--text-muted)]">or click to browse</p>
               </div>
               {/* Emotions preview */}
               <div className="flex items-center justify-center gap-4 mt-8">
@@ -194,25 +194,25 @@ export default function PackGenPage() {
                   <span key={e.id} className="text-2xl" title={e.label}>{e.emoji}</span>
                 ))}
               </div>
-              <p className="text-center text-[11px] text-stone-700 mt-2">These 6 emotions will be generated</p>
+              <p className="text-center text-[11px] text-[var(--text-muted)] mt-2">These 6 emotions will be generated</p>
             </div>
           </div>
         )}
 
         {/* Step 1: Style */}
         {step === 1 && (
-          <div className="flex-1 flex flex-col p-6 animate-fade-in">
+          <div className="flex-1 flex flex-col p-4 md:p-6 pb-24 md:pb-6 animate-fade-in">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="font-(--font-display) text-2xl font-bold text-stone-100">Choose a Style</h2>
-                <p className="text-sm text-stone-500 mt-1">Pick the visual style for your sticker pack</p>
+                <h2 className="font-(--font-display) text-2xl font-bold text-[var(--text-primary)]">Choose a Style</h2>
+                <p className="text-sm text-[var(--text-tertiary)] mt-1">Pick the visual style for your sticker pack</p>
               </div>
               {sourceImage && (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/[0.06]">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-[var(--overlay-border)]">
                     <img src={sourceImage.url} alt="Source" className="w-full h-full object-cover" />
                   </div>
-                  <button onClick={() => { setSourceImage(null); setStep(0) }} className="text-xs text-stone-600 hover:text-stone-400 cursor-pointer">Change photo</button>
+                  <button onClick={() => { setSourceImage(null); setStep(0) }} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] cursor-pointer">Change photo</button>
                 </div>
               )}
             </div>
@@ -225,14 +225,14 @@ export default function PackGenPage() {
                   className={`group rounded-2xl border overflow-hidden transition-all duration-200 cursor-pointer flex flex-col ${
                     selectedStyle === style.id
                       ? 'border-[#FF6B4A] ring-1 ring-[#FF6B4A]/30 bg-[#FF6B4A]/[0.05]'
-                      : 'border-white/[0.04] hover:border-white/[0.1] bg-white/[0.01]'
+                      : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] bg-[var(--card-bg)]'
                   }`}
                 >
                   <div className="aspect-square overflow-hidden bg-stone-900">
                     <img src={style.image} alt={style.label} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                   </div>
                   <div className="p-3">
-                    <span className={`text-sm font-semibold ${selectedStyle === style.id ? 'text-[#FF6B4A]' : 'text-stone-400'}`}>
+                    <span className={`text-sm font-semibold ${selectedStyle === style.id ? 'text-[#FF6B4A]' : 'text-[var(--text-secondary)]'}`}>
                       {style.label}
                     </span>
                   </div>
@@ -253,13 +253,13 @@ export default function PackGenPage() {
 
         {/* Step 2: Results */}
         {step === 2 && (
-          <div className="flex-1 flex flex-col p-6 animate-fade-in">
+          <div className="flex-1 flex flex-col p-4 md:p-6 pb-24 md:pb-6 animate-fade-in">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="font-(--font-display) text-2xl font-bold text-stone-100">
+                <h2 className="font-(--font-display) text-2xl font-bold text-[var(--text-primary)]">
                   {isGenerating ? 'Generating...' : 'Your Pack'}
                 </h2>
-                <p className="text-sm text-stone-500 mt-1">
+                <p className="text-sm text-[var(--text-tertiary)] mt-1">
                   {isGenerating ? loadingText : `${generatedPack.length} stickers • ${selectedStyle} style`}
                 </p>
               </div>
@@ -289,7 +289,7 @@ export default function PackGenPage() {
                     className="flex flex-col items-center gap-3 animate-slide-up"
                     style={{ animationDelay: `${i * 0.08}s` }}
                   >
-                    <div className="w-full aspect-square rounded-2xl bg-[repeating-conic-gradient(#151311_0%_25%,#0f0d0c_0%_50%)] bg-size-[16px_16px] border border-white/[0.04] flex items-center justify-center p-4 relative group overflow-hidden">
+                    <div className="w-full aspect-square rounded-2xl bg-[var(--canvas-bg)] bg-size-[16px_16px] border border-[var(--overlay-border)] flex items-center justify-center p-4 relative group overflow-hidden">
                       {sticker ? (
                         <>
                           <img src={sticker.url} alt={emotion.label} className="w-full h-full object-contain drop-shadow-xl transition-transform duration-300 group-hover:scale-105" />
@@ -302,12 +302,12 @@ export default function PackGenPage() {
                       ) : isGenerating ? (
                         <Loading size="sm" text="" />
                       ) : (
-                        <div className="text-stone-700 flex flex-col items-center gap-1">
+                        <div className="text-[var(--text-muted)] flex flex-col items-center gap-1">
                           <span className="text-3xl">{emotion.emoji}</span>
                         </div>
                       )}
                     </div>
-                    <span className="text-xs font-medium text-stone-500">{emotion.emoji} {emotion.label}</span>
+                    <span className="text-xs font-medium text-[var(--text-tertiary)]">{emotion.emoji} {emotion.label}</span>
                   </div>
                 )
               })}

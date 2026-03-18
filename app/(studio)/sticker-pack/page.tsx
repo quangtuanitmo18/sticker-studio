@@ -8,7 +8,7 @@ const StickerPackGenerator = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex-1 flex items-center justify-center bg-[#0C0A09]">
+      <div className="flex-1 flex items-center justify-center bg-[var(--background)]">
         <Loading text="Loading Sticker Pack..." />
       </div>
     ),

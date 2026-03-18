@@ -33,7 +33,7 @@ export function Loading({
         ))}
       </div>
       {text && (
-        <p className="text-xs text-stone-500 font-medium tracking-wide">{text}</p>
+        <p className="text-xs text-[var(--text-tertiary)] font-medium tracking-wide">{text}</p>
       )}
     </div>
   )

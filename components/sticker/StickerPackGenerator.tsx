@@ -1,34 +1,34 @@
 'use client'
 
-import * as React from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
 import {
-  Download,
-  Package,
-  ArrowLeft,
-  Type,
-  Sparkles,
-  Sliders,
-  Edit3,
-  X,
-  Plus,
+    ArrowLeft,
+    Download,
+    Edit3,
+    MessageCircle,
+    Package,
+    Plus,
+    Send,
+    Sparkles,
+    X
 } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import * as React from 'react'
 
-import { EXPRESSION_PRESETS, TEXT_PRESETS, STICKER_PACK_PRESETS } from '@/lib/sticker-presets'
-import type { ExpressionPreset } from '@/lib/sticker-presets'
-import { BODY_POSES } from '@/lib/sticker-body-poses'
-import type { BodyPose } from '@/lib/sticker-body-poses'
-import { OVERLAY_PRESETS } from '@/lib/sticker-overlays'
-import type { StickerOverlay } from '@/lib/sticker-overlays'
-import {
-  renderStickerPack,
-  downloadStickerZip,
-  type StickerOutput,
-  type StickerConfig,
-} from '@/lib/sticker-renderer'
-import { downloadBlob } from '@/lib/download'
-import { Loading } from '@/components/ui/Loading'
 import '@/components/avatar/rpm-creator.css'
+import { Loading } from '@/components/ui/Loading'
+import { downloadBlob } from '@/lib/download'
+import type { BodyPose } from '@/lib/sticker-body-poses'
+import { BODY_POSES } from '@/lib/sticker-body-poses'
+import type { StickerOverlay } from '@/lib/sticker-overlays'
+import { OVERLAY_PRESETS } from '@/lib/sticker-overlays'
+import type { ExpressionPreset } from '@/lib/sticker-presets'
+import { EXPRESSION_PRESETS, STICKER_PACK_PRESETS, TEXT_PRESETS } from '@/lib/sticker-presets'
+import {
+    downloadStickerZip,
+    renderStickerPack,
+    type StickerConfig,
+    type StickerOutput,
+} from '@/lib/sticker-renderer'
 
 // ─── Blendshape groups for editor ────────────────────────────
 
@@ -247,6 +247,51 @@ export default function StickerPackGenerator() {
     await downloadStickerZip(stickers)
   }
 
+  // ─── Platform export (Telegram/WhatsApp format) ──
+  const handlePlatformExport = async (platform: 'telegram' | 'whatsapp') => {
+    if (stickers.length === 0) return
+
+    const size = 512 // Both platforms use 512px
+    const format = 'webp' // Both use WebP
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')!
+
+    const blobs: { blob: Blob; name: string }[] = []
+
+    for (const sticker of stickers) {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = reject
+        img.src = sticker.dataUrl
+      })
+
+      ctx.clearRect(0, 0, size, size)
+      // Draw centered, maintaining aspect ratio
+      const scale = Math.min(size / img.width, size / img.height)
+      const w = img.width * scale
+      const h = img.height * scale
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
+
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), `image/${format}`, 0.9)
+      })
+      blobs.push({ blob, name: `sticker_${sticker.id}.${format}` })
+    }
+
+    // Download as ZIP
+    const { default: JSZip } = await import('jszip')
+    const zip = new JSZip()
+    for (const { blob, name } of blobs) {
+      zip.file(name, blob)
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' })
+    downloadBlob(zipBlob, `sticker_pack_${platform}.zip`)
+  }
+
   // ─── Add custom sticker ──
   const addCustomSticker = () => {
     // Create a blank sticker with neutral defaults
@@ -381,6 +426,12 @@ export default function StickerPackGenerator() {
         <div className="rpm-export-bar">
           <button className="rpm-btn rpm-btn-primary" onClick={handleDownloadAll}>
             <Package size={16} /> Download All (ZIP)
+          </button>
+          <button className="rpm-btn rpm-btn-outline" onClick={() => handlePlatformExport('telegram')} title="Export for Telegram (512px WebP)">
+            <Send size={16} /> Telegram
+          </button>
+          <button className="rpm-btn rpm-btn-outline" onClick={() => handlePlatformExport('whatsapp')} title="Export for WhatsApp (512px WebP)">
+            <MessageCircle size={16} /> WhatsApp
           </button>
         </div>
       )}

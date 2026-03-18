@@ -3,10 +3,10 @@
 /* ─── Design Tokens ──────────────────────────────────────── */
 
 :root {
-  --background: #0C0A09;
+  --background: #0a0a0a;
   --foreground: #E7E5E4;
-  --surface: #1C1917;
-  --surface-raised: #292524;
+  --surface: #141414;
+  --surface-raised: #1c1c1c;
   --border: rgba(255, 255, 255, 0.06);
   --border-hover: rgba(255, 255, 255, 0.12);
   --muted: #78716C;
@@ -15,6 +15,78 @@
   --accent-glow: rgba(255, 107, 74, 0.25);
   --sidebar-w: 64px;
   --radius: 14px;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ── Light mode overrides ──────────────────────────────────── */
+
+[data-theme='light'] {
+  --background: #F5F5F4;
+  --foreground: #1C1917;
+  --surface: #FFFFFF;
+  --surface-raised: #FAFAF9;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --muted: #A8A29E;
+  --accent-glow: rgba(255, 107, 74, 0.15);
+  --panel-bg: #ffffff;
+  --card-bg: rgba(0, 0, 0, 0.02);
+  --card-bg-hover: rgba(0, 0, 0, 0.04);
+  --input-bg: rgba(0, 0, 0, 0.03);
+  --canvas-bg: #E7E5E4;
+  --canvas-pattern: #d6d3d1;
+  --overlay-border: rgba(0, 0, 0, 0.06);
+  --overlay-border-hover: rgba(0, 0, 0, 0.12);
+  --text-primary: #1C1917;
+  --text-secondary: #44403C;
+  --text-tertiary: #78716C;
+  --text-muted: #A8A29E;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-hover: rgba(0, 0, 0, 0.2);
+}
+
+:root {
+  --panel-bg: #141210;
+  --card-bg: rgba(255, 255, 255, 0.02);
+  --card-bg-hover: rgba(255, 255, 255, 0.04);
+  --input-bg: rgba(255, 255, 255, 0.03);
+  --canvas-bg: #0f0d0c;
+  --canvas-pattern: #151311;
+  --overlay-border: rgba(255, 255, 255, 0.04);
+  --overlay-border-hover: rgba(255, 255, 255, 0.08);
+  --text-primary: #E7E5E4;
+  --text-secondary: #A8A29E;
+  --text-tertiary: #78716C;
+  --text-muted: #57534E;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-hover: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme='light'] body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+[data-theme='light'] body::after {
+  opacity: 0.02;
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+[data-theme='light'] input[type="range"] {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme='light'] ::selection {
+  background: rgba(255, 107, 74, 0.2);
+  color: #1C1917;
 }
 
 /* ─── Base ────────────────────────────────────────────────── */
@@ -30,6 +102,20 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+}
+
+/* ─── Grain overlay ──────────────────────────────────────── */
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px 128px;
 }
 
 /* ─── Scrollbar ───────────────────────────────────────────── */
@@ -91,16 +177,30 @@ body {
   50%      { box-shadow: 0 0 20px var(--accent-glow); }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
 .animate-fade-in {
-  animation: fadeIn 0.5s ease-out both;
+  animation: fadeIn 0.5s var(--ease-out-expo) both;
 }
 
 .animate-slide-up {
-  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slideUp 0.6s var(--ease-out-expo) both;
 }
 
 .animate-slide-in-right {
-  animation: slideInRight 0.4s ease-out both;
+  animation: slideInRight 0.4s var(--ease-out-expo) both;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
 }
 
 /* ─── Range Input ─────────────────────────────────────────── */
@@ -168,4 +268,52 @@ input[type="range"]::-moz-range-thumb {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
   }
+}
+
+/* ─── Mobile UX Enhancements ─────────────────────────────── */
+
+/* Smooth scroll everywhere */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent iOS double-tap zoom on interactive elements */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Prevent body scroll bounce on iOS */
+html {
+  overscroll-behavior: none;
+}
+
+/* Better inputs on mobile — prevent zoom */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area insets for mobile bottom nav */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .studio-layout nav[class*="bottom-0"] {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Smooth transitions on theme change */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+}
+
+/* Exclude elements that have their own transitions */
+button, a, [class*="transition"], input, canvas, video, img {
+  transition-property: none;
 }
