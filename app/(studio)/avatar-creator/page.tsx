@@ -1,24 +1,18 @@
-'use client'
+import type { Metadata } from 'next'
+import AvatarCreatorPage from './AvatarCreatorClient'
 
-import dynamic from 'next/dynamic'
-import { Loading } from '@/components/ui/Loading'
+export const metadata: Metadata = {
+  title: '3D Avatar Creator — Design Your Virtual Character',
+  description: 'Design and customize your own 3D avatar with Ready Player Me. Choose hairstyles, outfits, accessories and export for games, social media and messaging apps.',
+  alternates: { canonical: '/avatar-creator' },
+  openGraph: {
+    title: '3D Avatar Creator — Free Online Character Designer',
+    description: 'Design your 3D avatar: hairstyles, outfits, accessories. Export for games & social.',
+    url: '/avatar-creator',
+  },
+  keywords: ['3D avatar creator', 'avatar maker', 'character creator', 'virtual avatar', 'Ready Player Me', '3D character designer'],
+}
 
-const AvatarCreator = dynamic(
-  () => import('@/components/avatar/AvatarCreator'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex-1 flex items-center justify-center bg-[var(--background)]">
-        <Loading text="Loading Avatar Creator..." />
-      </div>
-    ),
-  }
-)
-
-export default function AvatarCreatorPage() {
-  return (
-    <div className="flex-1 flex flex-col">
-      <AvatarCreator />
-    </div>
-  )
+export default function Page() {
+  return <AvatarCreatorPage />
 }
