@@ -253,12 +253,12 @@ const RIGHT_TABS = [
 
 // ─── UI Helpers (module-level to prevent remount) ──────────
 function PanelLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">{children}</label>
+  return <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">{children}</label>
 }
 
 function PanelSection({ title, children }: { title: string, children: React.ReactNode }) {
   return (
-    <div className="border-b border-[var(--overlay-border)] pb-4 mb-4 last:border-0 last:mb-0 last:pb-0">
+    <div className="border-b border-(--overlay-border) pb-4 mb-4 last:border-0 last:mb-0 last:pb-0">
       <PanelLabel>{title}</PanelLabel>
       {children}
     </div>
@@ -559,12 +559,46 @@ export default function MakerPage() {
     downloadUrl(dataUrl, `sticker.${ext}`)
     toast('Sticker exported! 🎨', 'success')
   }
-  const [exportAction, setExportAction] = useState<'download' | null>(null)
+  const [exportAction, setExportAction] = useState<'download' | 'platform' | 'gif' | null>(null)
+  const pendingPlatformFormatRef = useRef<string | null>(null)
   useEffect(() => {
     if (exportAction && (window as any).exportCanvas) { (window as any).exportCanvas() }
   }, [exportAction])
-  const handleCanvasExport = (dataUrl: string) => {
-    if (exportAction) { handleExport(dataUrl); setExportAction(null) }
+  const handleCanvasExport = async (dataUrl: string) => {
+    const action = exportAction
+    setExportAction(null)
+    if (action === 'download') {
+      handleExport(dataUrl)
+    } else if (action === 'platform' && pendingPlatformFormatRef.current) {
+      // Platform export with full canvas
+      setIsExportingPlatform(true)
+      try {
+        const result = await exportForPlatform(dataUrl, pendingPlatformFormatRef.current, 'sticker')
+        downloadBlob(result.blob, result.filename)
+        const sizeStr = formatFileSize(result.fileSize)
+        const statusMsg = result.withinLimits ? '✅' : '⚠️ Over size limit'
+        toast(`Exported for ${result.format.label} (${sizeStr}) ${statusMsg}`, result.withinLimits ? 'success' : 'info')
+      } catch (err) {
+        console.error('Platform export error:', err)
+        toast('Export failed', 'error')
+      } finally {
+        setIsExportingPlatform(false)
+        pendingPlatformFormatRef.current = null
+      }
+    } else if (action === 'gif') {
+      // GIF export with full canvas
+      setIsExportingGif(true)
+      try {
+        const blob = await createAnimatedGif(dataUrl, selectedAnimation, canvasW)
+        downloadBlob(blob, `sticker_${selectedAnimation}.gif`)
+        toast('Animated GIF exported!', 'success')
+      } catch (err) {
+        console.error('GIF export error:', err)
+        toast('GIF export failed', 'error')
+      } finally {
+        setIsExportingGif(false)
+      }
+    }
   }
 
   // ─── Text handlers ──────────────────────────────────────
@@ -712,17 +746,7 @@ export default function MakerPage() {
       toast('No sticker to animate', 'error')
       return
     }
-    setIsExportingGif(true)
-    try {
-      const blob = await createAnimatedGif(mainSticker.src, selectedAnimation, canvasW)
-      downloadBlob(blob, `sticker_${selectedAnimation}.gif`)
-      toast('Animated GIF exported!', 'success')
-    } catch (err) {
-      console.error('GIF export error:', err)
-      toast('GIF export failed', 'error')
-    } finally {
-      setIsExportingGif(false)
-    }
+    setExportAction('gif')
   }
 
   // ─── Smart crop handler ─────────────────────────────────
@@ -751,19 +775,8 @@ export default function MakerPage() {
       toast('No sticker to export', 'error')
       return
     }
-    setIsExportingPlatform(true)
-    try {
-      const result = await exportForPlatform(mainSticker.src, formatId, 'sticker')
-      downloadBlob(result.blob, result.filename)
-      const sizeStr = formatFileSize(result.fileSize)
-      const statusMsg = result.withinLimits ? '✅' : '⚠️ Over size limit'
-      toast(`Exported for ${result.format.label} (${sizeStr}) ${statusMsg}`, result.withinLimits ? 'success' : 'info')
-    } catch (err) {
-      console.error('Platform export error:', err)
-      toast('Export failed', 'error')
-    } finally {
-      setIsExportingPlatform(false)
-    }
+    pendingPlatformFormatRef.current = formatId
+    setExportAction('platform')
   }
 
   // ═══════════════════════════════════════════════════════
@@ -774,21 +787,21 @@ export default function MakerPage() {
       <div className="flex-1 flex items-center justify-center p-6 md:pb-16">
         <div
           {...getRootProps()}
-          className={`w-full max-w-3xl aspect-[4/3] rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
+          className={`w-full max-w-3xl aspect-4/3 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
             isDragActive
               ? 'border-[#FF6B4A] bg-[#FF6B4A]/5 scale-[1.01]'
-              : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] hover:bg-[var(--card-bg)]'
+              : 'border-(--overlay-border) hover:border-(--overlay-border-hover) hover:bg-(--card-bg)'
           }`}
         >
           <input {...getInputProps()} />
-          <div className="w-16 h-16 rounded-2xl bg-[var(--card-bg-hover)] flex items-center justify-center mb-6">
-            <UploadCloud className="w-7 h-7 text-[var(--text-tertiary)]" />
+          <div className="w-16 h-16 rounded-2xl bg-(--card-bg-hover) flex items-center justify-center mb-6">
+            <UploadCloud className="w-7 h-7 text-(--text-tertiary)" />
           </div>
-          <p className="text-lg font-semibold text-[var(--text-secondary)] mb-1">
+          <p className="text-lg font-semibold text-(--text-secondary) mb-1">
             {isDragActive ? 'Drop your image here' : 'Drop an image to start'}
           </p>
-          <p className="text-sm text-[var(--text-muted)]">PNG, JPG, or WebP • Max 5MB</p>
-          <button className="mt-6 px-6 py-2.5 rounded-xl bg-[var(--card-bg-hover)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-white/10 hover:text-white transition-all cursor-pointer">
+          <p className="text-sm text-(--text-muted)">PNG, JPG, or WebP • Max 5MB</p>
+          <button className="mt-6 px-6 py-2.5 rounded-xl bg-(--card-bg-hover) text-sm font-semibold text-(--text-secondary) hover:bg-white/10 hover:text-white transition-all cursor-pointer">
             Browse Files
           </button>
         </div>
@@ -808,9 +821,9 @@ export default function MakerPage() {
       )}
 
       {/* ════════ LEFT PANEL ════════ */}
-      <div className="hidden md:flex w-[280px] shrink-0 bg-[var(--panel-bg)] border-r border-[var(--overlay-border)] flex-col overflow-hidden">
+      <div className="hidden md:flex w-[280px] shrink-0 bg-(--panel-bg) border-r border-(--overlay-border) flex-col overflow-hidden">
         {/* Tab strip */}
-        <div className="flex border-b border-[var(--overlay-border)]">
+        <div className="flex border-b border-(--overlay-border)">
           {LEFT_TABS.map(tab => (
             <button
               key={tab.key}
@@ -818,7 +831,7 @@ export default function MakerPage() {
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-semibold transition-all cursor-pointer ${
                 leftTab === tab.key
                   ? 'text-[#FF6B4A] bg-[#FF6B4A]/5 border-b-2 border-[#FF6B4A]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--card-bg)]'
+                  : 'text-(--text-muted) hover:text-(--text-secondary) hover:bg-(--card-bg)'
               }`}
             >
               <tab.icon className="w-4 h-4" strokeWidth={leftTab === tab.key ? 2.2 : 1.5} />
@@ -841,7 +854,7 @@ export default function MakerPage() {
                       className={`py-2 px-3 rounded-lg text-[11px] font-semibold text-left transition-all cursor-pointer ${
                         canvasW === size.w && canvasH === size.h
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
                       {size.label}
@@ -850,33 +863,33 @@ export default function MakerPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-3">
                   <div>
-                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Width</label>
-                    <input type="number" value={canvasW} onChange={e => setCanvasW(Number(e.target.value))} className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:border-[#FF6B4A]/30 focus:outline-none" />
+                    <label className="text-[10px] text-(--text-muted) block mb-1">Width</label>
+                    <input type="number" value={canvasW} onChange={e => setCanvasW(Number(e.target.value))} className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-(--overlay-border) rounded-lg text-xs text-(--text-secondary) focus:border-[#FF6B4A]/30 focus:outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Height</label>
-                    <input type="number" value={canvasH} onChange={e => setCanvasH(Number(e.target.value))} className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:border-[#FF6B4A]/30 focus:outline-none" />
+                    <label className="text-[10px] text-(--text-muted) block mb-1">Height</label>
+                    <input type="number" value={canvasH} onChange={e => setCanvasH(Number(e.target.value))} className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-(--overlay-border) rounded-lg text-xs text-(--text-secondary) focus:border-[#FF6B4A]/30 focus:outline-none" />
                   </div>
                 </div>
               </PanelSection>
 
               <PanelSection title="Zoom">
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer"><ZoomOut className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer"><ZoomOut className="w-3.5 h-3.5" /></button>
                   <div className="flex-1 relative">
                     <input type="range" min="25" max="200" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full" style={{ background: `linear-gradient(to right, #FF6B4A ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.06) ${((zoom - 25) / 175) * 100}%)` }} />
                   </div>
-                  <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer"><ZoomIn className="w-3.5 h-3.5" /></button>
-                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-10 text-right">{zoom}%</span>
+                  <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer"><ZoomIn className="w-3.5 h-3.5" /></button>
+                  <span className="text-[11px] text-(--text-tertiary) font-mono w-10 text-right">{zoom}%</span>
                 </div>
               </PanelSection>
 
               <PanelSection title="Undo / Redo">
                 <div className="flex gap-2">
-                  <button onClick={() => { /* undo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer text-[11px] font-semibold">
+                  <button onClick={() => { /* undo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer text-[11px] font-semibold">
                     <Undo2 className="w-3.5 h-3.5" /> Undo
                   </button>
-                  <button onClick={() => { /* redo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--card-bg-hover)] transition-colors cursor-pointer text-[11px] font-semibold">
+                  <button onClick={() => { /* redo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer text-[11px] font-semibold">
                     <Redo2 className="w-3.5 h-3.5" /> Redo
                   </button>
                 </div>
@@ -900,7 +913,7 @@ export default function MakerPage() {
           {leftTab === 'layers' && (
             <div className="space-y-1">
               {elements.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)] text-center py-8">No elements on canvas</p>
+                <p className="text-xs text-(--text-muted) text-center py-8">No elements on canvas</p>
               ) : (
                 elements.slice().reverse().map((el, visualIdx) => {
                   const realIdx = elements.length - 1 - visualIdx
@@ -934,16 +947,16 @@ export default function MakerPage() {
                         onClick={() => setSelectedId(el.id)}
                         className={`flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-grab active:cursor-grabbing transition-all group ${
                           selectedId === el.id
-                            ? 'bg-[#FF6B4A]/10 border border-[#FF6B4A]/20 text-[var(--text-primary)]'
-                            : 'bg-[var(--card-bg)] border border-transparent text-[var(--text-tertiary)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                            ? 'bg-[#FF6B4A]/10 border border-[#FF6B4A]/20 text-(--text-primary)'
+                            : 'bg-(--card-bg) border border-transparent text-(--text-tertiary) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                         }`}
                       >
-                        <GripVertical className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                        <GripVertical className="w-3 h-3 text-(--text-muted) shrink-0" />
                         <span className="text-xs font-medium flex-1 truncate">{getElementLabel(el)}</span>
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'up') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--card-bg-hover)] cursor-pointer"><ChevronUp className="w-3 h-3" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'down') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--card-bg-hover)] cursor-pointer"><ChevronDown className="w-3 h-3" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); duplicateElement(el.id) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--card-bg-hover)] cursor-pointer"><Plus className="w-3 h-3" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'up') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-(--card-bg-hover) cursor-pointer"><ChevronUp className="w-3 h-3" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'down') }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-(--card-bg-hover) cursor-pointer"><ChevronDown className="w-3 h-3" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); duplicateElement(el.id) }} className="w-5 h-5 rounded flex items-center justify-center hover:bg-(--card-bg-hover) cursor-pointer"><Plus className="w-3 h-3" /></button>
                           <button onClick={(e) => { e.stopPropagation(); deleteElement(el.id) }} className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:bg-red-400/10 cursor-pointer"><Trash2 className="w-3 h-3" /></button>
                         </div>
                       </div>
@@ -968,7 +981,7 @@ export default function MakerPage() {
                       key={fmt}
                       onClick={() => setExportFormat(fmt)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase transition-all cursor-pointer ${
-                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-(--text-muted) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
                       {fmt}
@@ -981,16 +994,16 @@ export default function MakerPage() {
                 <PanelSection title="Quality">
                   <div className="flex items-center gap-3">
                     <input type="range" min="10" max="100" value={exportQuality} onChange={e => setExportQuality(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${exportQuality}%, rgba(255,255,255,0.06) ${exportQuality}%)` }} />
-                    <span className="text-xs text-[var(--text-tertiary)] font-mono w-8 text-right">{exportQuality}%</span>
+                    <span className="text-xs text-(--text-tertiary) font-mono w-8 text-right">{exportQuality}%</span>
                   </div>
                 </PanelSection>
               )}
 
               <PanelSection title="Canvas Info">
-                <div className="space-y-1.5 text-xs text-[var(--text-muted)]">
-                  <div className="flex justify-between"><span>Size</span><span className="text-[var(--text-secondary)]">{canvasW}×{canvasH}</span></div>
-                  <div className="flex justify-between"><span>Elements</span><span className="text-[var(--text-secondary)]">{elements.length}</span></div>
-                  <div className="flex justify-between"><span>Zoom</span><span className="text-[var(--text-secondary)]">{zoom}%</span></div>
+                <div className="space-y-1.5 text-xs text-(--text-muted)">
+                  <div className="flex justify-between"><span>Size</span><span className="text-(--text-secondary)">{canvasW}×{canvasH}</span></div>
+                  <div className="flex justify-between"><span>Elements</span><span className="text-(--text-secondary)">{elements.length}</span></div>
+                  <div className="flex justify-between"><span>Zoom</span><span className="text-(--text-secondary)">{zoom}%</span></div>
                 </div>
               </PanelSection>
 
@@ -1005,8 +1018,8 @@ export default function MakerPage() {
       {/* ════════ CENTER: CANVAS ════════ */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="shrink-0 h-11 border-b border-[var(--overlay-border)] bg-[var(--background)]/90 backdrop-blur-sm flex items-center justify-between px-4">
-          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        <div className="shrink-0 h-11 border-b border-(--overlay-border) bg-[var(--background)]/90 backdrop-blur-sm flex items-center justify-between px-4">
+          <div className="flex items-center gap-2 text-xs text-(--text-muted)">
             <span className="font-mono">{canvasW}×{canvasH}</span>
             <span>•</span>
             <span>{elements.length} elements</span>
@@ -1019,7 +1032,7 @@ export default function MakerPage() {
         </div>
 
         {/* Canvas */}
-        <div className="flex-1 relative bg-[var(--canvas-bg)] overflow-auto pb-24 lg:pb-0">
+        <div className="flex-1 relative bg-(--canvas-bg) overflow-auto pb-24 lg:pb-0">
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loading text="Removing background..." size="lg" />
@@ -1045,9 +1058,9 @@ export default function MakerPage() {
       </div>
 
       {/* ════════ RIGHT PANEL ════════ */}
-      <div className="hidden lg:flex w-[280px] shrink-0 bg-[var(--panel-bg)] border-l border-[var(--overlay-border)] flex-col overflow-hidden">
+      <div className="hidden lg:flex w-[280px] shrink-0 bg-(--panel-bg) border-l border-(--overlay-border) flex-col overflow-hidden">
         {/* Tab strip */}
-        <div className="flex border-b border-[var(--overlay-border)]">
+        <div className="flex border-b border-(--overlay-border)">
           {RIGHT_TABS.map(tab => (
             <button
               key={tab.key}
@@ -1055,7 +1068,7 @@ export default function MakerPage() {
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-semibold transition-all cursor-pointer ${
                 rightTab === tab.key
                   ? 'text-[#FF6B4A] bg-[#FF6B4A]/5 border-b-2 border-[#FF6B4A]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--card-bg)]'
+                  : 'text-(--text-muted) hover:text-(--text-secondary) hover:bg-(--card-bg)'
               }`}
             >
               <tab.icon className="w-4 h-4" strokeWidth={rightTab === tab.key ? 2.2 : 1.5} />
@@ -1076,7 +1089,7 @@ export default function MakerPage() {
                       key={p.color}
                       onClick={() => { setOutlineColor(p.color); setOutlineGradient(null) }}
                       className={`w-full aspect-square rounded-lg border-2 transition-all cursor-pointer ${
-                        outlineColor === p.color && !outlineGradient ? 'border-[#FF6B4A] scale-110' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)]'
+                        outlineColor === p.color && !outlineGradient ? 'border-[#FF6B4A] scale-110' : 'border-(--overlay-border) hover:border-(--overlay-border-hover)'
                       }`}
                       style={{ backgroundColor: p.color }}
                       title={p.label}
@@ -1084,12 +1097,12 @@ export default function MakerPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={outlineColor} onChange={(e) => { setOutlineColor(e.target.value); setOutlineGradient(null) }} className="w-8 h-8 rounded-lg cursor-pointer border border-[var(--overlay-border)]" />
+                  <input type="color" value={outlineColor} onChange={(e) => { setOutlineColor(e.target.value); setOutlineGradient(null) }} className="w-8 h-8 rounded-lg cursor-pointer border border-(--overlay-border)" />
                   <input
                     type="text"
                     value={outlineGradient ? outlineGradient.label : outlineColor}
                     onChange={(e) => { setOutlineColor(e.target.value); setOutlineGradient(null) }}
-                    className="flex-1 px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-xs text-[var(--text-secondary)] font-mono uppercase focus:border-[#FF6B4A]/30 focus:outline-none"
+                    className="flex-1 px-2 py-1.5 bg-[var(--input-bg)] border border-(--overlay-border) rounded-lg text-xs text-(--text-secondary) font-mono uppercase focus:border-[#FF6B4A]/30 focus:outline-none"
                   />
                 </div>
               </PanelSection>
@@ -1101,7 +1114,7 @@ export default function MakerPage() {
                       key={g.id}
                       onClick={() => setOutlineGradient(g)}
                       className={`h-9 rounded-lg border-2 transition-all cursor-pointer ${
-                        outlineGradient?.id === g.id ? 'border-[#FF6B4A] scale-105' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)]'
+                        outlineGradient?.id === g.id ? 'border-[#FF6B4A] scale-105' : 'border-(--overlay-border) hover:border-(--overlay-border-hover)'
                       }`}
                       style={{ background: g.css }}
                       title={g.label}
@@ -1111,7 +1124,7 @@ export default function MakerPage() {
                 {outlineGradient && (
                   <button
                     onClick={() => setOutlineGradient(null)}
-                    className="mt-2 w-full py-1.5 rounded-lg bg-[var(--input-bg)] text-[10px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer"
+                    className="mt-2 w-full py-1.5 rounded-lg bg-[var(--input-bg)] text-[10px] font-semibold text-(--text-secondary) hover:bg-(--card-bg-hover) transition-all cursor-pointer"
                   >
                     Clear Gradient
                   </button>
@@ -1121,23 +1134,23 @@ export default function MakerPage() {
               <PanelSection title="Outline Width">
                 <div className="flex items-center gap-3">
                   <input type="range" min="0" max="50" value={outlineWidth} onChange={(e) => setOutlineWidth(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${outlineWidth * 2}%, rgba(255,255,255,0.06) ${outlineWidth * 2}%)` }} />
-                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-8 text-right">{outlineWidth}px</span>
+                  <span className="text-[11px] text-(--text-tertiary) font-mono w-8 text-right">{outlineWidth}px</span>
                 </div>
               </PanelSection>
 
               <PanelSection title="Shadow Blur">
                 <div className="flex items-center gap-3">
                   <input type="range" min="0" max="50" value={shadowBlur} onChange={(e) => setShadowBlur(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${shadowBlur * 2}%, rgba(255,255,255,0.06) ${shadowBlur * 2}%)` }} />
-                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-8 text-right">{shadowBlur}px</span>
+                  <span className="text-[11px] text-(--text-tertiary) font-mono w-8 text-right">{shadowBlur}px</span>
                 </div>
               </PanelSection>
 
               <PanelSection title="Quick Styles">
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button onClick={() => { setOutlineColor('#ffffff'); setOutlineWidth(15); setShadowBlur(15); setOutlineGradient(null) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">Classic</button>
-                  <button onClick={() => { setOutlineColor('#000000'); setOutlineWidth(8); setShadowBlur(0); setOutlineGradient(null) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">Minimal</button>
-                  <button onClick={() => { setOutlineGradient(OUTLINE_GRADIENTS[0]); setOutlineWidth(20); setShadowBlur(10) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">🌅 Sunset</button>
-                  <button onClick={() => { setOutlineGradient(OUTLINE_GRADIENTS[3]); setOutlineWidth(18); setShadowBlur(15) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">⚡ Neon</button>
+                  <button onClick={() => { setOutlineColor('#ffffff'); setOutlineWidth(15); setShadowBlur(15); setOutlineGradient(null) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-(--text-secondary) hover:bg-(--card-bg-hover) transition-all cursor-pointer">Classic</button>
+                  <button onClick={() => { setOutlineColor('#000000'); setOutlineWidth(8); setShadowBlur(0); setOutlineGradient(null) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-(--text-secondary) hover:bg-(--card-bg-hover) transition-all cursor-pointer">Minimal</button>
+                  <button onClick={() => { setOutlineGradient(OUTLINE_GRADIENTS[0]); setOutlineWidth(20); setShadowBlur(10) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-(--text-secondary) hover:bg-(--card-bg-hover) transition-all cursor-pointer">🌅 Sunset</button>
+                  <button onClick={() => { setOutlineGradient(OUTLINE_GRADIENTS[3]); setOutlineWidth(18); setShadowBlur(15) }} className="py-2 rounded-lg bg-[var(--input-bg)] text-[11px] font-semibold text-(--text-secondary) hover:bg-(--card-bg-hover) transition-all cursor-pointer">⚡ Neon</button>
                 </div>
               </PanelSection>
             </div>
@@ -1161,7 +1174,7 @@ export default function MakerPage() {
                   value={stickerText}
                   onChange={(e) => setStickerText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
-                  className="w-full px-3 py-2.5 border border-[var(--overlay-border)] rounded-xl bg-[var(--input-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#FF6B4A]/30 focus:outline-none text-sm"
+                  className="w-full px-3 py-2.5 border border-(--overlay-border) rounded-xl bg-[var(--input-bg)] text-(--text-primary) placeholder:text-(--text-muted) focus:border-[#FF6B4A]/30 focus:outline-none text-sm"
                 />
                 <Button onClick={handleAddText} className="w-full mt-2" size="sm" disabled={!stickerText}>
                   <Plus className="w-4 h-4" /> Add to Canvas
@@ -1177,10 +1190,10 @@ export default function MakerPage() {
                       className={`py-2 px-2 rounded-lg text-left transition-all cursor-pointer ${
                         fontFamily === f.value
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
-                      <span className="text-[10px] block text-[var(--text-muted)]">{f.label}</span>
+                      <span className="text-[10px] block text-(--text-muted)">{f.label}</span>
                       <span className="text-sm font-bold" style={{ fontFamily: f.value }}>{f.sample}</span>
                     </button>
                   ))}
@@ -1190,17 +1203,17 @@ export default function MakerPage() {
               <PanelSection title="Size & Stroke">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Font Size</label>
+                    <label className="text-[10px] text-(--text-muted) block mb-1">Font Size</label>
                     <div className="flex items-center gap-1">
                       <input type="range" min="16" max="120" value={fontSize} onChange={e => { const v = Number(e.target.value); setFontSize(v); if (isTextSelected) updateSelectedText({ fontSize: v }) }} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${((fontSize - 16) / 104) * 100}%, rgba(255,255,255,0.06) ${((fontSize - 16) / 104) * 100}%)` }} />
-                      <span className="text-[10px] text-[var(--text-muted)] font-mono w-6 text-right">{fontSize}</span>
+                      <span className="text-[10px] text-(--text-muted) font-mono w-6 text-right">{fontSize}</span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-[var(--text-muted)] block mb-1">Stroke Width</label>
+                    <label className="text-[10px] text-(--text-muted) block mb-1">Stroke Width</label>
                     <div className="flex items-center gap-1">
                       <input type="range" min="0" max="10" value={textStrokeWidth} onChange={e => { const v = Number(e.target.value); setTextStrokeWidth(v); if (isTextSelected) updateSelectedText({ strokeWidth: v }) }} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${textStrokeWidth * 10}%, rgba(255,255,255,0.06) ${textStrokeWidth * 10}%)` }} />
-                      <span className="text-[10px] text-[var(--text-muted)] font-mono w-4 text-right">{textStrokeWidth}</span>
+                      <span className="text-[10px] text-(--text-muted) font-mono w-4 text-right">{textStrokeWidth}</span>
                     </div>
                   </div>
                 </div>
@@ -1209,17 +1222,17 @@ export default function MakerPage() {
               <PanelSection title="Colors">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-[var(--text-muted)] block mb-1.5">Fill</label>
+                    <label className="text-[10px] text-(--text-muted) block mb-1.5">Fill</label>
                     <div className="flex items-center gap-2">
-                      <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); if (isTextSelected) updateSelectedText({ fill: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-[var(--overlay-border)]" />
-                      <span className="text-[10px] uppercase text-[var(--text-muted)] font-mono">{textColor}</span>
+                      <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); if (isTextSelected) updateSelectedText({ fill: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-(--overlay-border)" />
+                      <span className="text-[10px] uppercase text-(--text-muted) font-mono">{textColor}</span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-[var(--text-muted)] block mb-1.5">Stroke</label>
+                    <label className="text-[10px] text-(--text-muted) block mb-1.5">Stroke</label>
                     <div className="flex items-center gap-2">
-                      <input type="color" value={textOutlineColor} onChange={(e) => { setTextOutlineColor(e.target.value); if (isTextSelected) updateSelectedText({ stroke: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-[var(--overlay-border)]" />
-                      <span className="text-[10px] uppercase text-[var(--text-muted)] font-mono">{textOutlineColor}</span>
+                      <input type="color" value={textOutlineColor} onChange={(e) => { setTextOutlineColor(e.target.value); if (isTextSelected) updateSelectedText({ stroke: e.target.value }) }} className="w-7 h-7 rounded cursor-pointer border border-(--overlay-border)" />
+                      <span className="text-[10px] uppercase text-(--text-muted) font-mono">{textOutlineColor}</span>
                     </div>
                   </div>
                 </div>
@@ -1231,7 +1244,7 @@ export default function MakerPage() {
                     <button
                       key={preset.label}
                       onClick={() => handleAddTextPreset(preset)}
-                      className="py-2.5 px-3 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-left hover:bg-[var(--card-bg-hover)] hover:border-[var(--overlay-border-hover)] transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-lg bg-(--card-bg) border border-(--overlay-border) text-left hover:bg-(--card-bg-hover) hover:border-(--overlay-border-hover) transition-all cursor-pointer"
                     >
                       <span className="text-[11px] font-bold block" style={{ fontFamily: preset.font, color: preset.fill, textShadow: `1px 1px 0 ${preset.stroke}` }}>
                         {preset.label}
@@ -1252,7 +1265,7 @@ export default function MakerPage() {
                     key={cat}
                     onClick={() => setActiveTemplateCategory(cat)}
                     className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                      activeTemplateCategory === cat ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
+                      activeTemplateCategory === cat ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'text-(--text-muted) hover:text-(--text-secondary) hover:bg-[var(--input-bg)]'
                     }`}
                   >
                     {TEMPLATE_CATEGORIES[cat].name}
@@ -1263,7 +1276,7 @@ export default function MakerPage() {
                 {TEMPLATE_CATEGORIES[activeTemplateCategory].items.map((src, idx) => (
                   <div
                     key={idx}
-                    className="aspect-square bg-[var(--card-bg)] rounded-lg border border-[var(--overlay-border)] flex items-center justify-center p-1 cursor-pointer hover:border-[#FF6B4A]/30 hover:bg-[var(--card-bg-hover)] transition-all"
+                    className="aspect-square bg-(--card-bg) rounded-lg border border-(--overlay-border) flex items-center justify-center p-1 cursor-pointer hover:border-[#FF6B4A]/30 hover:bg-(--card-bg-hover) transition-all"
                     onClick={() => handleAddTemplate(src)}
                   >
                     <img src={src} alt="" className="w-full h-full object-contain" loading="lazy" />
@@ -1292,7 +1305,7 @@ export default function MakerPage() {
                       className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
                         activeFilterCategory === cat.id
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
+                          : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
                       }`}
                     >
                       {cat.emoji} {cat.label}
@@ -1311,7 +1324,7 @@ export default function MakerPage() {
                       className={`py-3 rounded-lg text-center transition-all cursor-pointer ${
                         activeFilter === filter.id
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30'
-                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
                       <span className="text-lg block mb-0.5">{filter.emoji}</span>
@@ -1331,7 +1344,7 @@ export default function MakerPage() {
                   {isUpscaling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                   {isUpscaling ? 'Upscaling...' : 'AI Upscale (2×)'}
                 </Button>
-                <p className="text-[10px] text-[var(--text-muted)] mt-1.5">Enhance image quality using AI</p>
+                <p className="text-[10px] text-(--text-muted) mt-1.5">Enhance image quality using AI</p>
               </PanelSection>
             </div>
           )}
@@ -1348,7 +1361,7 @@ export default function MakerPage() {
                       className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
                         activeFrameCategory === cat.id
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
+                          : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
                       }`}
                     >
                       {cat.emoji} {cat.label}
@@ -1366,7 +1379,7 @@ export default function MakerPage() {
                       className={`py-3 rounded-lg text-center transition-all cursor-pointer ${
                         activeFrame === frame.id
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30'
-                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
                       <span className="text-lg block mb-0.5">{frame.emoji}</span>
@@ -1384,7 +1397,7 @@ export default function MakerPage() {
                     className="flex-1"
                     style={{ background: `linear-gradient(to right, #FF6B4A ${frameBorderWidth * 5}%, rgba(255,255,255,0.06) ${frameBorderWidth * 5}%)` }}
                   />
-                  <span className="text-[11px] text-[var(--text-tertiary)] font-mono w-8 text-right">{frameBorderWidth}px</span>
+                  <span className="text-[11px] text-(--text-tertiary) font-mono w-8 text-right">{frameBorderWidth}px</span>
                 </div>
               </PanelSection>
             </div>
@@ -1400,17 +1413,17 @@ export default function MakerPage() {
                       key={format.id}
                       onClick={() => handlePlatformExport(format.id)}
                       disabled={isExportingPlatform || elements.length === 0}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-[var(--card-bg)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:border-[var(--overlay-border-hover)] transition-all cursor-pointer group text-left"
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-(--card-bg) border border-(--overlay-border) hover:bg-(--card-bg-hover) hover:border-(--overlay-border-hover) transition-all cursor-pointer group text-left"
                     >
                       <span className="text-xl shrink-0">{format.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-semibold text-[var(--text-secondary)] group-hover:text-white block">{format.label}</span>
-                        <span className="text-[10px] text-[var(--text-muted)]">{format.description}</span>
+                        <span className="text-sm font-semibold text-(--text-secondary) group-hover:text-white block">{format.label}</span>
+                        <span className="text-[10px] text-(--text-muted)">{format.description}</span>
                       </div>
                       {isExportingPlatform ? (
-                        <Loader2 className="w-4 h-4 text-[var(--text-muted)] animate-spin shrink-0" />
+                        <Loader2 className="w-4 h-4 text-(--text-muted) animate-spin shrink-0" />
                       ) : (
-                        <Download className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[#FF6B4A] shrink-0 transition-colors" />
+                        <Download className="w-4 h-4 text-(--text-muted) group-hover:text-[#FF6B4A] shrink-0 transition-colors" />
                       )}
                     </button>
                   ))}
@@ -1424,7 +1437,7 @@ export default function MakerPage() {
                       key={anim.id}
                       onClick={() => setSelectedAnimation(anim.id)}
                       className={`py-2 px-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        selectedAnimation === anim.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/30' : 'bg-[var(--input-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                        selectedAnimation === anim.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/30' : 'bg-[var(--input-bg)] text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
                       <span className="text-sm">{anim.emoji}</span>
@@ -1439,7 +1452,7 @@ export default function MakerPage() {
               </PanelSection>
 
               <PanelSection title="Smart Crop">
-                <p className="text-[11px] text-[var(--text-muted)] mb-2">Auto-crop to the main subject with padding.</p>
+                <p className="text-[11px] text-(--text-muted) mb-2">Auto-crop to the main subject with padding.</p>
                 <Button className="w-full" onClick={handleSmartCrop} disabled={!processedUrl || isSmartCropping}>
                   {isSmartCropping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                   {isSmartCropping ? 'Cropping...' : 'Smart Crop'}
@@ -1453,7 +1466,7 @@ export default function MakerPage() {
                       key={fmt}
                       onClick={() => setExportFormat(fmt)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase transition-all cursor-pointer ${
-                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--card-bg-hover)] hover:text-[var(--text-secondary)]'
+                        exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-(--text-muted) hover:bg-(--card-bg-hover) hover:text-(--text-secondary)'
                       }`}
                     >
                       {fmt}
@@ -1489,7 +1502,7 @@ export default function MakerPage() {
                   <div className="grid grid-cols-4 gap-1.5">
                     {OUTLINE_PRESETS.map(p => (
                       <button key={p.color} onClick={() => { setOutlineColor(p.color); setOutlineGradient(null) }}
-                        className={`aspect-square rounded-lg border-2 transition-all cursor-pointer ${outlineColor === p.color && !outlineGradient ? 'border-[#FF6B4A] scale-110' : 'border-[var(--overlay-border)]'}`}
+                        className={`aspect-square rounded-lg border-2 transition-all cursor-pointer ${outlineColor === p.color && !outlineGradient ? 'border-[#FF6B4A] scale-110' : 'border-(--overlay-border)'}`}
                         style={{ backgroundColor: p.color }} title={p.label} />
                     ))}
                   </div>
@@ -1501,13 +1514,13 @@ export default function MakerPage() {
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <input value={stickerText} onChange={e => setStickerText(e.target.value)} placeholder="Type text..."
-                    className="flex-1 px-3 py-2 bg-[var(--input-bg)] border border-[var(--overlay-border)] rounded-lg text-sm text-[var(--text-secondary)]" />
+                    className="flex-1 px-3 py-2 bg-[var(--input-bg)] border border-(--overlay-border) rounded-lg text-sm text-(--text-secondary)" />
                   <Button onClick={handleAddText} disabled={!stickerText}><Plus className="w-4 h-4" /></Button>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {TEXT_PRESETS.map(p => (
                     <button key={p.label} onClick={() => handleAddTextPreset(p)}
-                      className="py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-center hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">
+                      className="py-2 rounded-lg bg-(--card-bg) border border-(--overlay-border) text-center hover:bg-(--card-bg-hover) transition-all cursor-pointer">
                       <span className="text-xs">{p.label}</span>
                     </button>
                   ))}
@@ -1520,7 +1533,7 @@ export default function MakerPage() {
                 <div className="flex gap-1 overflow-x-auto">
                   {FILTER_CATEGORIES.map(c => (
                     <button key={c.id} onClick={() => setActiveFilterCategory(c.id)}
-                      className={`shrink-0 py-1.5 px-3 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'bg-[var(--card-bg)] text-[var(--text-muted)]'}`}>
+                      className={`shrink-0 py-1.5 px-3 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'bg-(--card-bg) text-(--text-muted)'}`}>
                       {c.emoji} {c.label}
                     </button>
                   ))}
@@ -1528,7 +1541,7 @@ export default function MakerPage() {
                 <div className="grid grid-cols-4 gap-1.5">
                   {IMAGE_FILTERS.filter(f => f.id === 'none' || f.category === activeFilterCategory).map(f => (
                     <button key={f.id} onClick={() => handleApplyFilter(f.id)} disabled={isApplyingFilter}
-                      className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${activeFilter === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)]'}`}>
+                      className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${activeFilter === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}>
                       <span className="text-base block">{f.emoji}</span>
                       <span className="text-[9px]">{f.label}</span>
                     </button>
@@ -1542,7 +1555,7 @@ export default function MakerPage() {
                 <div className="flex gap-1 overflow-x-auto">
                   {FRAME_CATEGORIES.map(c => (
                     <button key={c.id} onClick={() => setActiveFrameCategory(c.id)}
-                      className={`shrink-0 py-1.5 px-3 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeFrameCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'bg-[var(--card-bg)] text-[var(--text-muted)]'}`}>
+                      className={`shrink-0 py-1.5 px-3 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeFrameCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'bg-(--card-bg) text-(--text-muted)'}`}>
                       {c.emoji} {c.label}
                     </button>
                   ))}
@@ -1550,7 +1563,7 @@ export default function MakerPage() {
                 <div className="grid grid-cols-4 gap-1.5">
                   {STICKER_FRAMES.filter(f => f.id === 'none' || f.category === activeFrameCategory).map(f => (
                     <button key={f.id} onClick={() => handleApplyFrame(f.id)}
-                      className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${activeFrame === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)]'}`}>
+                      className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${activeFrame === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}>
                       <span className="text-base block">{f.emoji}</span>
                       <span className="text-[9px]">{f.label}</span>
                     </button>
@@ -1564,7 +1577,7 @@ export default function MakerPage() {
                 <div className="flex gap-1 overflow-x-auto">
                   {Object.keys(TEMPLATE_CATEGORIES).map(cat => (
                     <button key={cat} onClick={() => setActiveTemplateCategory(cat as TemplateCategory)}
-                      className={`shrink-0 py-1.5 px-3 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeTemplateCategory === cat ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'bg-[var(--card-bg)] text-[var(--text-muted)]'}`}>
+                      className={`shrink-0 py-1.5 px-3 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeTemplateCategory === cat ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'bg-(--card-bg) text-(--text-muted)'}`}>
                       {TEMPLATE_CATEGORIES[cat as TemplateCategory].name}
                     </button>
                   ))}
@@ -1572,7 +1585,7 @@ export default function MakerPage() {
                 <div className="grid grid-cols-5 gap-1.5 max-h-[200px] overflow-y-auto">
                   {TEMPLATE_CATEGORIES[activeTemplateCategory].items.slice(0, 30).map((src, i) => (
                     <button key={i} onClick={() => handleAddTemplate(src)}
-                      className="aspect-square rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] p-1 hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer">
+                      className="aspect-square rounded-lg bg-(--card-bg) border border-(--overlay-border) p-1 hover:bg-(--card-bg-hover) transition-all cursor-pointer">
                       <img src={src} alt="" className="w-full h-full object-contain" />
                     </button>
                   ))}
@@ -1586,7 +1599,7 @@ export default function MakerPage() {
                   <div className="flex gap-1">
                     {(['png', 'jpeg', 'webp'] as const).map(fmt => (
                       <button key={fmt} onClick={() => setExportFormat(fmt)}
-                        className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase transition-all cursor-pointer ${exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase transition-all cursor-pointer ${exportFormat === fmt ? 'bg-[#FF6B4A] text-white' : 'bg-[var(--input-bg)] text-(--text-muted)'}`}>
                         {fmt}
                       </button>
                     ))}
@@ -1630,7 +1643,7 @@ function MakerMobileSheet({ children, rightTab, onTabChange, tabs }: MakerMobile
 
   return (
     <div
-      className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-[51] bg-[var(--panel-bg)] border-t border-[var(--overlay-border)] rounded-t-2xl shadow-[0_-4px_30px_rgba(0,0,0,0.3)] flex flex-col"
+      className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-[51] bg-(--panel-bg) border-t border-(--overlay-border) rounded-t-2xl shadow-[0_-4px_30px_rgba(0,0,0,0.3)] flex flex-col"
       style={{ height: expanded ? '55vh' : '56px', transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)' }}
     >
       {/* Tab toolbar */}
@@ -1639,7 +1652,7 @@ function MakerMobileSheet({ children, rightTab, onTabChange, tabs }: MakerMobile
           <button key={tab.key}
             onClick={(e) => { e.stopPropagation(); onTabChange(tab.key); setExpanded(true) }}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[9px] font-semibold transition-all cursor-pointer min-w-[50px] ${
-              rightTab === tab.key && expanded ? 'text-[#FF6B4A] bg-[#FF6B4A]/5' : 'text-[var(--text-muted)]'
+              rightTab === tab.key && expanded ? 'text-[#FF6B4A] bg-[#FF6B4A]/5' : 'text-(--text-muted)'
             }`}
           >
             <tab.icon className="w-4 h-4" />
