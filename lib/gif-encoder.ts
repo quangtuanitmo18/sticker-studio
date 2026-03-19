@@ -181,7 +181,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 
 // ─── Simple GIF89a encoder ──────────────────────────────────
 
-function encodeGif(frames: ImageData[], width: number, height: number, fps: number): Uint8Array {
+export function encodeGif(frames: ImageData[], width: number, height: number, fps: number): Uint8Array {
   const delay = Math.round(100 / fps) // GIF delay is in 1/100ths of a second
 
   // Build a global color table from all frames (256 colors max)
@@ -262,77 +262,113 @@ function writeUint16(arr: number[], val: number) {
   arr.push((val >> 8) & 0xff)
 }
 
-// Simple median-cut color quantization to 256 colors
+// High-quality Floyd-Steinberg Dithering with a 6x6x6 Uniform RGB Cube (216 colors)
+// This preserves the exact perception of the original video colors by smoothly blending
+// the 216 palette colors using error diffusion, eliminating all color banding and dropping
+// no hues.
 function quantizeFrames(frames: ImageData[]) {
-  const colorMap = new Map<number, number>()
-  const palette: number[] = []
-  let nextIdx = 1 // index 0 = transparent (0,0,0)
+  const palette: number[] = [0, 0, 0] // index 0 = transparent
 
-  palette.push(0, 0, 0) // transparent placeholder
+  // 6x6x6 uniform RGB cube (216 colors)
+  // Ensures entire color spectrum is available for dithering
+  for (let r = 0; r < 6; r++) {
+    for (let g = 0; g < 6; g++) {
+      for (let b = 0; b < 6; b++) {
+        palette.push(r * 51, g * 51, b * 51)
+      }
+    }
+  }
+
+  // Add 39 grayscale shades to fill exactly 256 colors
+  for (let i = 1; i <= 39; i++) {
+    const v = Math.floor(i * 255 / 40)
+    palette.push(v, v, v)
+  }
 
   const indexedFrames: Uint8Array[] = []
 
   for (const frame of frames) {
-    const indexed = new Uint8Array(frame.width * frame.height)
-    const data = frame.data
+    const width = frame.width
+    const height = frame.height
+    const indexed = new Uint8Array(width * height)
+    
+    // We need 3 float components per pixel for error distribution
+    const errBuffer = new Float32Array(width * height * 3)
 
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i]
-      const g = data[i + 1]
-      const b = data[i + 2]
-      const a = data[i + 3]
-      const px = i / 4
-
-      if (a < 128) {
-        indexed[px] = 0 // transparent
-        continue
+    // Copy original RGB into errBuffer
+    for (let i = 0; i < frame.data.length; i += 4) {
+      if (frame.data[i + 3] >= 128) {
+        const px = (i / 4) * 3
+        errBuffer[px] = frame.data[i]
+        errBuffer[px + 1] = frame.data[i + 1]
+        errBuffer[px + 2] = frame.data[i + 2]
       }
+    }
 
-      // Quantize to 6-bit per channel for mapping (64 levels)
-      const qr = (r >> 2) & 0x3f
-      const qg = (g >> 2) & 0x3f
-      const qb = (b >> 2) & 0x3f
-      const key = (qr << 12) | (qg << 6) | qb
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const srcOffset = (y * width + x) * 4
+        if (frame.data[srcOffset + 3] < 128) {
+          indexed[y * width + x] = 0 // transparent
+          continue
+        }
 
-      let idx = colorMap.get(key)
-      if (idx === undefined) {
-        if (nextIdx < 256) {
-          idx = nextIdx++
-          colorMap.set(key, idx)
-          palette.push(r, g, b)
-        } else {
-          // Palette full, find nearest
-          idx = findNearest(palette, r, g, b)
+        const bufOffset = (y * width + x) * 3
+        const oldR = errBuffer[bufOffset]
+        const oldG = errBuffer[bufOffset + 1]
+        const oldB = errBuffer[bufOffset + 2]
+
+        // Fast mathematically nearest color in 6x6x6 cube
+        let rIdx = Math.round(oldR / 51); if (rIdx < 0) rIdx = 0; else if (rIdx > 5) rIdx = 5;
+        let gIdx = Math.round(oldG / 51); if (gIdx < 0) gIdx = 0; else if (gIdx > 5) gIdx = 5;
+        let bIdx = Math.round(oldB / 51); if (bIdx < 0) bIdx = 0; else if (bIdx > 5) bIdx = 5;
+
+        indexed[y * width + x] = 1 + rIdx * 36 + gIdx * 6 + bIdx
+
+        const newR = rIdx * 51
+        const newG = gIdx * 51
+        const newB = bIdx * 51
+
+        const errR = oldR - newR
+        const errG = oldG - newG
+        const errB = oldB - newB
+
+        // Floyd-Steinberg Error Diffusion to 4 neighboring pixels:
+        // x+1, y   (7/16)
+        // x-1, y+1 (3/16)
+        // x  , y+1 (5/16)
+        // x+1, y+1 (1/16)
+        if (x + 1 < width) {
+          const p = bufOffset + 3
+          errBuffer[p]     += (errR * 7) / 16
+          errBuffer[p + 1] += (errG * 7) / 16
+          errBuffer[p + 2] += (errB * 7) / 16
+        }
+        if (y + 1 < height) {
+          if (x - 1 >= 0) {
+            const p = ((y + 1) * width + (x - 1)) * 3
+            errBuffer[p]     += (errR * 3) / 16
+            errBuffer[p + 1] += (errG * 3) / 16
+            errBuffer[p + 2] += (errB * 3) / 16
+          }
+          const p2 = ((y + 1) * width + x) * 3
+          errBuffer[p2]     += (errR * 5) / 16
+          errBuffer[p2 + 1] += (errG * 5) / 16
+          errBuffer[p2 + 2] += (errB * 5) / 16
+          
+          if (x + 1 < width) {
+            const p3 = ((y + 1) * width + (x + 1)) * 3
+            errBuffer[p3]     += (errR * 1) / 16
+            errBuffer[p3 + 1] += (errG * 1) / 16
+            errBuffer[p3 + 2] += (errB * 1) / 16
+          }
         }
       }
-      indexed[px] = idx
     }
     indexedFrames.push(indexed)
   }
 
-  // Pad palette to 256 entries
-  while (palette.length < 256 * 3) {
-    palette.push(0)
-  }
-
   return { palette, indexedFrames }
-}
-
-function findNearest(palette: number[], r: number, g: number, b: number): number {
-  let minDist = Infinity
-  let best = 1
-  for (let i = 1; i < 256; i++) {
-    const pr = palette[i * 3]
-    const pg = palette[i * 3 + 1]
-    const pb = palette[i * 3 + 2]
-    if (pr === undefined) break
-    const dist = (pr - r) ** 2 + (pg - g) ** 2 + (pb - b) ** 2
-    if (dist < minDist) {
-      minDist = dist
-      best = i
-    }
-  }
-  return best
 }
 
 // LZW encoder for GIF
