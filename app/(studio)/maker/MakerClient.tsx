@@ -79,25 +79,25 @@ const CANVAS_SIZES = [
 ]
 
 const FONTS = [
-  { value: 'Impact', label: 'Impact', sample: 'BOLD' },
-  { value: 'Arial Black', label: 'Arial Black', sample: 'THICK' },
-  { value: 'Comic Sans MS', label: 'Comic Sans', sample: 'Fun!' },
-  { value: 'Courier New', label: 'Courier', sample: 'CODE' },
-  { value: 'Georgia', label: 'Georgia', sample: 'Serif' },
-  { value: 'Verdana', label: 'Verdana', sample: 'Clean' },
-  { value: 'Trebuchet MS', label: 'Trebuchet', sample: 'Modern' },
-  { value: 'Lucida Console', label: 'Lucida', sample: 'MONO' },
+  { value: 'Anton', label: 'Anton', sample: 'BOLD' },
+  { value: 'Archivo Black', label: 'Archivo Black', sample: 'THICK' },
+  { value: 'Comic Neue', label: 'Comic Neue', sample: 'Fun!' },
+  { value: 'Courier Prime', label: 'Courier Prime', sample: 'CODE' },
+  { value: 'Lora', label: 'Lora', sample: 'Serif' },
+  { value: 'Nunito', label: 'Nunito', sample: 'Clean' },
+  { value: 'Fira Sans', label: 'Fira Sans', sample: 'Modern' },
+  { value: 'Fira Code', label: 'Fira Code', sample: 'MONO' },
 ]
 
 const TEXT_PRESETS = [
-  { label: '🔥 Meme', font: 'Impact', fill: '#ffffff', stroke: '#000000', strokeWidth: 3, size: 72 },
-  { label: '✨ Neon', font: 'Arial Black', fill: '#00e5ff', stroke: '#000000', strokeWidth: 2, size: 60 },
-  { label: '💖 Pop', font: 'Comic Sans MS', fill: '#ff4081', stroke: '#ffffff', strokeWidth: 2, size: 56 },
-  { label: '🎮 Cyber', font: 'Courier New', fill: '#39ff14', stroke: '#000000', strokeWidth: 2, size: 48 },
-  { label: '⚡ Bold', font: 'Arial Black', fill: '#F59E0B', stroke: '#000000', strokeWidth: 3, size: 64 },
-  { label: '🌊 Wave', font: 'Georgia', fill: '#60a5fa', stroke: '#1e3a5f', strokeWidth: 2, size: 52 },
-  { label: '🍿 Fun', font: 'Comic Sans MS', fill: '#ffeb3b', stroke: '#ff9800', strokeWidth: 2, size: 60 },
-  { label: '❄️ Frost', font: 'Verdana', fill: '#e0f7fa', stroke: '#006064', strokeWidth: 2, size: 50 },
+  { label: '🔥 Meme', font: 'Anton', fill: '#ffffff', stroke: '#000000', strokeWidth: 3, size: 72 },
+  { label: '✨ Neon', font: 'Archivo Black', fill: '#00e5ff', stroke: '#000000', strokeWidth: 2, size: 60 },
+  { label: '💖 Pop', font: 'Comic Neue', fill: '#ff4081', stroke: '#ffffff', strokeWidth: 2, size: 56 },
+  { label: '🎮 Cyber', font: 'Courier Prime', fill: '#39ff14', stroke: '#000000', strokeWidth: 2, size: 48 },
+  { label: '⚡ Bold', font: 'Archivo Black', fill: '#F59E0B', stroke: '#000000', strokeWidth: 3, size: 64 },
+  { label: '🌊 Wave', font: 'Lora', fill: '#60a5fa', stroke: '#1e3a5f', strokeWidth: 2, size: 52 },
+  { label: '🍿 Fun', font: 'Comic Neue', fill: '#ffeb3b', stroke: '#ff9800', strokeWidth: 2, size: 60 },
+  { label: '❄️ Frost', font: 'Nunito', fill: '#e0f7fa', stroke: '#006064', strokeWidth: 2, size: 50 },
 ]
 
 const emoji = (code: string) => `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${code}.svg`
@@ -329,7 +329,8 @@ export default function MakerPage() {
   useEffect(() => {
     if (!isTextSelected || !selectedElement) return
     setRightTab('text')
-    setFontFamily(selectedElement.fontFamily || 'Impact')
+    setStickerText(selectedElement.text)
+    setFontFamily(selectedElement.fontFamily || 'Anton')
     setFontSize(selectedElement.fontSize || 60)
     setTextColor(selectedElement.fill || '#ffffff')
     setTextOutlineColor(selectedElement.stroke || '#000000')
@@ -873,27 +874,7 @@ export default function MakerPage() {
                 </div>
               </PanelSection>
 
-              <PanelSection title="Zoom">
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer"><ZoomOut className="w-3.5 h-3.5" /></button>
-                  <div className="flex-1 relative">
-                    <input type="range" min="25" max="200" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full" style={{ background: `linear-gradient(to right, #FF6B4A ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.06) ${((zoom - 25) / 175) * 100}%)` }} />
-                  </div>
-                  <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer"><ZoomIn className="w-3.5 h-3.5" /></button>
-                  <span className="text-[11px] text-(--text-tertiary) font-mono w-10 text-right">{zoom}%</span>
-                </div>
-              </PanelSection>
 
-              <PanelSection title="Undo / Redo">
-                <div className="flex gap-2">
-                  <button onClick={() => { /* undo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer text-[11px] font-semibold">
-                    <Undo2 className="w-3.5 h-3.5" /> Undo
-                  </button>
-                  <button onClick={() => { /* redo via browser */ }} className="flex-1 py-2 rounded-lg bg-[var(--input-bg)] flex items-center justify-center gap-1.5 text-(--text-tertiary) hover:text-white hover:bg-(--card-bg-hover) transition-colors cursor-pointer text-[11px] font-semibold">
-                    <Redo2 className="w-3.5 h-3.5" /> Redo
-                  </button>
-                </div>
-              </PanelSection>
 
               <PanelSection title="Image">
                 <div className="space-y-2">
@@ -1033,6 +1014,24 @@ export default function MakerPage() {
 
         {/* Canvas */}
         <div className="flex-1 relative bg-(--canvas-bg) overflow-auto pb-24 lg:pb-0">
+          
+
+
+          {/* Canvas Controls */}
+          <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
+            {/* Undo/Redo */}
+            <div className="flex flex-col gap-2 bg-[var(--panel-bg)] p-2 rounded-2xl shadow-lg border border-[var(--overlay-border)]">
+              <button title="Undo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-[var(--card-bg)] hover:bg-[var(--card-bg-hover)] text-[var(--text-secondary)] transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
+              <button title="Redo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-[var(--card-bg)] hover:bg-[var(--card-bg-hover)] text-[var(--text-secondary)] transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+            </div>
+            
+            {/* Zoom */}
+            <div className="flex flex-col gap-2 bg-[var(--panel-bg)] p-2 rounded-2xl shadow-xl border border-[var(--overlay-border)]">
+              <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-[var(--card-bg)] hover:bg-[var(--card-bg-hover)] text-[var(--text-secondary)] transition-all cursor-pointer"><ZoomIn className="w-4 h-4" /></button>
+              <div className="text-[10px] font-bold text-center text-[var(--text-muted)] w-8">{zoom}%</div>
+              <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-[var(--card-bg)] hover:bg-[var(--card-bg-hover)] text-[var(--text-secondary)] transition-all cursor-pointer"><ZoomOut className="w-4 h-4" /></button>
+            </div>
+          </div>
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loading text="Removing background..." size="lg" />
@@ -1042,7 +1041,19 @@ export default function MakerPage() {
               <Loading text="Generating sticker..." size="lg" />
             </div>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `scale(${zoom / 100})` }}>
+            <div 
+              style={{ 
+                width: `${Math.max(100, (zoom / 100) * 100)}%`, 
+                height: `${Math.max(100, (zoom / 100) * 100)}%`, 
+                display: 'flex', 
+                minWidth: '100%',
+                minHeight: '100%' 
+              }}
+            >
+            <div 
+              className="w-full h-full flex items-center justify-center p-4 origin-top-left transition-transform duration-200"
+              style={{ transform: `scale(${zoom / 100})`, width: `${(100 / zoom) * 100}%`, height: `${(100 / zoom) * 100}%` }}
+            >
               <CanvasEditor
                 elements={elements}
                 setElements={setElements}
@@ -1052,6 +1063,7 @@ export default function MakerPage() {
                 width={canvasW}
                 height={canvasH}
               />
+            </div>
             </div>
           )}
         </div>
@@ -1172,7 +1184,7 @@ export default function MakerPage() {
                   type="text"
                   placeholder="WOW!, OMG, LOL..."
                   value={stickerText}
-                  onChange={(e) => setStickerText(e.target.value)}
+                  onChange={(e) => { setStickerText(e.target.value); if (isTextSelected) updateSelectedText({ text: e.target.value }) }}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
                   className="w-full px-3 py-2.5 border border-(--overlay-border) rounded-xl bg-[var(--input-bg)] text-(--text-primary) placeholder:text-(--text-muted) focus:border-[#FF6B4A]/30 focus:outline-none text-sm"
                 />
@@ -1513,7 +1525,7 @@ export default function MakerPage() {
             {rightTab === 'text' && (
               <div className="space-y-3">
                 <div className="flex gap-2">
-                  <input value={stickerText} onChange={e => setStickerText(e.target.value)} placeholder="Type text..."
+                  <input value={stickerText} onChange={e => { setStickerText(e.target.value); if (isTextSelected) updateSelectedText({ text: e.target.value }) }} placeholder="Type text..."
                     className="flex-1 px-3 py-2 bg-[var(--input-bg)] border border-(--overlay-border) rounded-lg text-sm text-(--text-secondary)" />
                   <Button onClick={handleAddText} disabled={!stickerText}><Plus className="w-4 h-4" /></Button>
                 </div>

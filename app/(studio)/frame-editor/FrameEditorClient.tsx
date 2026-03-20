@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { downloadUrl } from '@/lib/download'
 import {
-  Cloud, Copy, Download, Eye, GripVertical, ImagePlus,
-  Layers, Loader2, MousePointer2, Move, Plus,
-  RotateCcw, Save, Square, Trash2, X
+    Cloud, Copy, Download, Eye, GripVertical, ImagePlus,
+    Layers, Loader2, MousePointer2,
+    Plus,
+    Redo2,
+    RotateCcw, Save, Square, Trash2, Undo2,
+    X
 } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -94,12 +97,15 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
   // Save success
   const [justSaved, setJustSaved] = useState(false)
   const [isSavingCloud, setIsSavingCloud] = useState(false)
+  const [showExport, setShowExport] = useState(false)
 
   // Saved templates
   const [savedTemplates, setSavedTemplates] = useState<FrameTemplate[]>([])
 
   // Scale factor for display
-  const [scale, setScale] = useState(1)
+  const [baseScale, setBaseScale] = useState(1)
+  const [zoom, setZoom] = useState(1)
+  const scale = baseScale * zoom
 
   useEffect(() => { setSavedTemplates(loadSavedTemplates()) }, [])
 
@@ -125,7 +131,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
       const cw = containerRef.current.clientWidth - 32
       const ch = containerRef.current.clientHeight - 32
       const s = Math.min(cw / frameW, ch / frameH, 1)
-      setScale(s)
+      setBaseScale(s)
     }
     updateScale()
     const ro = new ResizeObserver(updateScale)
@@ -785,10 +791,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
               {isSavingCloud ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5" />} Cloud
             </Button>
           </div>
-          <button onClick={exportJSON} className="w-full py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer flex items-center justify-center gap-1.5"><Download className="w-3.5 h-3.5" /> Export JSON</button>
-          {showPreview && (
-            <button onClick={exportPreview} className="w-full py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer flex items-center justify-center gap-1.5"><Download className="w-3.5 h-3.5" /> Export Preview PNG</button>
-          )}
+
           {slots.length > 0 && (
             <button onClick={() => { setSlots([]); setSelectedId(null) }} className="w-full py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-all cursor-pointer flex items-center justify-center gap-1.5">
               <RotateCcw className="w-3.5 h-3.5" /> Clear All Slots
@@ -831,20 +834,60 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
       </div>
 
       {/* ═══ CANVAS AREA ═══ */}
-      <div ref={containerRef} className="flex-1 flex items-center justify-center p-4 bg-[var(--canvas-bg)] overflow-hidden">
-        <div className="relative" style={{ width: frameW * scale, height: frameH * scale }}>
-          <canvas ref={canvasRef}
-            className={`shadow-2xl rounded-lg ${tool === 'draw' ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-default'}`}
-            style={{ width: frameW * scale, height: frameH * scale }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerLeave={onPointerUp}
-          />
-          {/* Status bar */}
-          <div className="absolute -bottom-8 left-0 right-0 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-            <span>{frameW}×{frameH}px · {slots.length} {slots.length === 1 ? 'slot' : 'slots'}</span>
-            <span>Scale: {Math.round(scale * 100)}%</span>
+      <div className="flex-1 flex flex-col items-center justify-center p-0 lg:p-4 bg-[var(--canvas-bg)] relative" onClick={() => setShowExport(false)}>
+        {/* Export Controls */}
+        <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
+          <button 
+            title="Export"
+            onClick={() => setShowExport(!showExport)} 
+            className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all cursor-pointer font-semibold text-[11px] ${showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white' : 'bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)]'}`}
+          >
+            <Download className="w-4 h-4" /> Export
+          </button>
+          {showExport && (
+            <div className="bg-[var(--panel-bg)] p-3 rounded-2xl shadow-xl border border-[var(--overlay-border)] w-48 animate-in fade-in slide-in-from-top-2">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">Standard Export</label>
+              <div className="space-y-2">
+                <button onClick={exportJSON} className="w-full py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer flex items-center justify-center gap-1.5"><Download className="w-3.5 h-3.5" /> JSON</button>
+                {showPreview && (
+                  <button onClick={exportPreview} className="w-full py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--overlay-border)] text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer flex items-center justify-center gap-1.5"><Download className="w-3.5 h-3.5" /> Preview PNG</button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Canvas Controls */}
+        <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
+          {/* Undo/Redo */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
+            <button title="Undo" onClick={() => {}} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
+            <button title="Redo" onClick={() => {}} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+          </div>
+          
+          {/* Zoom */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
+            <button onClick={() => setZoom(Math.min(zoom + 0.1, 3))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Plus className="w-4 h-4" /></button>
+            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">{Math.round(zoom * 100)}%</div>
+            <button onClick={() => setZoom(Math.max(zoom - 0.1, 0.5))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><div className="w-3 h-0.5 bg-current rounded-full" /></button>
+          </div>
+        </div>
+
+        <div ref={containerRef} className="flex-1 w-full overflow-auto grid place-items-center p-4">
+          <div className="relative shrink-0" style={{ width: frameW * scale, height: frameH * scale }}>
+            <canvas ref={canvasRef}
+              className={`shadow-2xl rounded-lg ${tool === 'draw' ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-default'}`}
+              style={{ width: frameW * scale, height: frameH * scale }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerUp}
+            />
+            {/* Status bar */}
+            <div className="absolute -bottom-8 left-0 right-0 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+              <span>{frameW}×{frameH}px · {slots.length} {slots.length === 1 ? 'slot' : 'slots'}</span>
+              <span>Zoom: {Math.round(zoom * 100)}%</span>
+            </div>
           </div>
         </div>
       </div>

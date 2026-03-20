@@ -11,27 +11,30 @@ import { downloadUrl } from '@/lib/download'
 import { FILTER_CATEGORIES, IMAGE_FILTERS } from '@/lib/image-filters'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
 import {
-    Camera, CameraIcon,
-    Eye,
-    FlipHorizontal2,
-    Frame,
-    Grid, Layers,
-    Plus,
-    RefreshCw, RotateCcw, Settings, Sparkles,
-    SwitchCamera,
-    Trash2, Type,
-    X
+  Camera, CameraIcon,
+  Download,
+  Eye,
+  FlipHorizontal2,
+  Frame,
+  Grid, Layers,
+  Plus,
+  Redo2,
+  RefreshCw, RotateCcw, Settings, Sparkles,
+  SwitchCamera,
+  Trash2, Type,
+  Undo2,
+  X
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FrameTemplate } from '../frame-editor/FrameEditorClient'
 import FrameEditorClient from '../frame-editor/FrameEditorClient'
 import {
-    STRIP_BACKGROUNDS,
-    STRIP_TEMPLATES,
-    loadImage,
-    playBeep,
-    playShutterSound,
-    type StripTemplate,
+  STRIP_BACKGROUNDS,
+  STRIP_TEMPLATES,
+  loadImage,
+  playBeep,
+  playShutterSound,
+  type StripTemplate,
 } from './booth-utils'
 
 // BoothOverlay replaced by shared CanvasElement from OverlayCanvas
@@ -76,6 +79,7 @@ export default function PhotoboothPage() {
   const [stripBg, setStripBg] = useState('white')
   const [reviewMode, setReviewMode] = useState(false)
   const [selectedForReview, setSelectedForReview] = useState<boolean[]>([])
+  const [zoom, setZoom] = useState(1)
 
   // Custom frame templates
   const [customFrames, setCustomFrames] = useState<FrameTemplate[]>([])
@@ -115,6 +119,7 @@ export default function PhotoboothPage() {
   const [isBursting, setIsBursting] = useState(false)
   const [showCurtain, setShowCurtain] = useState(false)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
+  const [showExport, setShowExport] = useState(false)
 
   const previewRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
@@ -277,7 +282,8 @@ export default function PhotoboothPage() {
     setSelectedOverlay(ov.id)
     if (ov.type === 'text') {
       setSideTab('text')
-      setFontFamily(ov.fontFamily || 'Impact')
+      setStickerText(ov.text)
+      setFontFamily(ov.fontFamily || 'Anton')
       setFontSize(ov.fontSize || 48)
       setTextColor(ov.fill || '#ffffff')
       setTextStroke(ov.stroke || '#000000')
@@ -292,7 +298,8 @@ export default function PhotoboothPage() {
     if (!selectedOv) return
     if (selectedOv.type === 'text') {
       setSideTab('text')
-      setFontFamily(selectedOv.fontFamily || 'Impact')
+      setStickerText(selectedOv.text)
+      setFontFamily(selectedOv.fontFamily || 'Anton')
       setFontSize(selectedOv.fontSize || 48)
       setTextColor(selectedOv.fill || '#ffffff')
       setTextStroke(selectedOv.stroke || '#000000')
@@ -300,11 +307,11 @@ export default function PhotoboothPage() {
     }
   }, [selectedOverlay]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live-update selected text overlay when TextPanel controls change
-  useEffect(() => {
-    if (!selectedOv || selectedOv.type !== 'text') return
-    setOverlays(prev => prev.map(o => o.id === selectedOv.id ? { ...o, fontFamily, fontSize, fill: textColor, stroke: textStroke, strokeWidth: textStrokeWidth } : o))
-  }, [fontFamily, fontSize, textColor, textStroke, textStrokeWidth]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Update a property on the selected text element directly without relying on flaky useEffects
+  const updateSelectedText = (patch: Partial<CanvasElement>) => {
+    if (!selectedOverlay) return
+    setOverlays(prev => prev.map(o => o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o))
+  }
 
   // Track preview container dimensions for Konva stage sizing
   useEffect(() => {
@@ -555,7 +562,23 @@ export default function PhotoboothPage() {
 
 
 
-        {sideTab === 'text' && <TextPanel text={stickerText} onTextChange={setStickerText} fontFamily={fontFamily} onFontChange={setFontFamily} fontSize={fontSize} onSizeChange={setFontSize} fillColor={textColor} onFillChange={setTextColor} strokeColor={textStroke} onStrokeChange={setTextStroke} strokeWidth={textStrokeWidth} onStrokeWidthChange={setTextStrokeWidth} onAddText={addTextOverlay} onAddPreset={addTextPreset} selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined} />}
+        {sideTab === 'text' && <TextPanel 
+            text={stickerText} 
+            onTextChange={v => { setStickerText(v); updateSelectedText({ text: v }) }} 
+            fontFamily={fontFamily} 
+            onFontChange={v => { setFontFamily(v); updateSelectedText({ fontFamily: v }) }} 
+            fontSize={fontSize} 
+            onSizeChange={v => { setFontSize(v); updateSelectedText({ fontSize: v }) }} 
+            fillColor={textColor} 
+            onFillChange={v => { setTextColor(v); updateSelectedText({ fill: v }) }} 
+            strokeColor={textStroke} 
+            onStrokeChange={v => { setTextStroke(v); updateSelectedText({ stroke: v }) }} 
+            strokeWidth={textStrokeWidth} 
+            onStrokeWidthChange={v => { setTextStrokeWidth(v); updateSelectedText({ strokeWidth: v }) }} 
+            onAddText={addTextOverlay} 
+            onAddPreset={addTextPreset} 
+            selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined} 
+          />}
         {sideTab === 'assets' && <AssetPanel onAddAsset={addAssetOverlay} />}
 
         {sideTab === 'adjust' && <>
@@ -597,14 +620,6 @@ export default function PhotoboothPage() {
         </div>}
 
         {!reviewMode && <div className="space-y-2 pt-2">
-          <ExportFormatPanel
-            format={exportFormat}
-            onFormatChange={setExportFormat}
-            onExport={handleExport}
-            isExporting={isExporting}
-            disabled={capturedPhotos.length === 0}
-            exportLabel={activeCustomFrame ? 'Export Frame' : 'Export Strip'}
-          />
           <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary)" onClick={() => { setCapturedPhotos([]); setOverlays([]) }}><RotateCcw className="w-4 h-4" /> Clear All</Button>
         </div>}
       </div>
@@ -632,57 +647,118 @@ export default function PhotoboothPage() {
       </div>
 
       {/* ═══ MAIN AREA — Camera + Strip ═══ */}
-      <div className="flex-1 flex flex-col items-center justify-start lg:justify-center p-0 lg:p-6 bg-(--canvas-bg) overflow-y-auto gap-2 lg:gap-6 pb-48 lg:pb-6" onClick={() => setSelectedOverlay(null)}>
-        {/* Camera */}
-        <div className="relative w-full lg:max-w-[640px]">
-          <div className="relative rounded-none lg:rounded-2xl overflow-hidden shadow-2xl">
-            <div className="relative rounded-none lg:rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
-              <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: mirrored ? 'scaleX(-1)' : 'none', filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }} playsInline muted autoPlay />
-              {!cameraActive && <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)"><Camera className="w-16 h-16 mb-4 opacity-20" /><p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p></div>}
-              {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
-              {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
-              {isBursting && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /><span className="text-xs font-bold text-white">RECORDING</span></div>}
-              {activeFilter !== 'none' && cameraActive && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10"><span className="text-[10px] text-white font-medium">{IMAGE_FILTERS.find(f => f.id === activeFilter)?.emoji} {IMAGE_FILTERS.find(f => f.id === activeFilter)?.label}</span></div>}
-
-            </div>
-          </div>
-          {/* Desktop capture button */}
-          {cameraActive && <div className="hidden lg:flex justify-center mt-4"><button onClick={handleCapture} disabled={countdown > 0 || isBursting} className="w-16 h-16 rounded-full border-4 border-(--overlay-border-hover) bg-white hover:bg-stone-100 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-xl disabled:opacity-50 touch-manipulation">{burstMode ? <Grid className="w-6 h-6 text-[#FF6B4A]" /> : <div className="w-10 h-10 rounded-full bg-[#FF6B4A]" />}</button></div>}
-        </div>
-
-        {/* Strip / Frame preview — always show when not in review mode */}
+      <div className="flex-1 flex flex-col p-0 lg:p-6 bg-(--canvas-bg) relative" onClick={() => { setSelectedOverlay(null); setShowExport(false) }}>
+        {/* Export Controls */}
         {!reviewMode && (
-          <div ref={previewRef}
-            className="relative rounded-2xl shadow-2xl w-full"
-            style={{
-              maxWidth: activeCustomFrame ? '360px' : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid' ? '300px' : '240px',
-              ...(activeCustomFrame ? {} : { aspectRatio: stripTemplate.id === 'polaroid' ? '5/6' : stripTemplate.id === 'grid2x2' ? '1/1' : '3/8' })
-            }}
-            onPointerMove={e => { onSlotMove(e) }}
-            onPointerUp={() => { onSlotUp() }}
-          >
-            {activeCustomFrame ? (
-              <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} onSlotDown={onSlotDown} onSlotWheel={onSlotWheel} />
-            ) : (
-              <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} />
-            )}
-            {/* Konva overlay layer for text/assets — stopPropagation prevents parent deselect */}
-            {previewDims.w > 0 && previewDims.h > 0 && (
-              <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
-                <OverlayCanvas
-                  ref={overlayRef}
-                  elements={overlays}
-                  setElements={setOverlays}
-                  selectedId={selectedOverlay}
-                  setSelectedId={setSelectedOverlay}
-                  width={previewDims.w}
-                  height={previewDims.h}
+          <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
+            <button 
+              title="Export"
+              disabled={capturedPhotos.length === 0}
+              onClick={() => capturedPhotos.length > 0 && setShowExport(!showExport)} 
+              className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${capturedPhotos.length === 0 ? 'opacity-40 cursor-not-allowed bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-muted)]' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] cursor-pointer'}`}
+            >
+              <Download className="w-4 h-4" /> Export
+            </button>
+            {showExport && capturedPhotos.length > 0 && (
+              <div className="bg-[var(--panel-bg)] p-3 rounded-2xl shadow-xl border border-[var(--overlay-border)] w-48 animate-in fade-in slide-in-from-top-2">
+                <ExportFormatPanel
+                  format={exportFormat}
+                  onFormatChange={setExportFormat}
+                  onExport={handleExport}
+                  isExporting={isExporting}
+                  disabled={capturedPhotos.length === 0}
+                  exportLabel={activeCustomFrame ? 'Export Frame' : 'Export Strip'}
                 />
               </div>
             )}
           </div>
         )}
+
+        {/* Canvas Controls */}
+        <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
+          {/* Undo/Redo */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
+            <button title="Undo" onClick={() => {}} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
+            <button title="Redo" onClick={() => {}} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+          </div>
+          
+          {/* Zoom */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
+            <button onClick={() => setZoom(Math.min(zoom + 0.1, 3))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Plus className="w-4 h-4" /></button>
+            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">{Math.round(zoom * 100)}%</div>
+            <button onClick={() => setZoom(Math.max(zoom - 0.1, 0.5))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><div className="w-3 h-0.5 bg-current rounded-full" /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto rounded-xl">
+          <div 
+            style={{ 
+              width: `${Math.max(100, zoom * 100)}%`, 
+              height: `${Math.max(100, zoom * 100)}%`, 
+              display: 'flex', 
+              flexDirection: 'column',
+              minWidth: '100%',
+              minHeight: '100%' 
+            }}
+          >
+          <div 
+            className="w-full h-full flex flex-col items-center justify-start p-4 gap-4 origin-top-left transition-transform duration-200"
+            style={{ transform: `scale(${zoom})`, width: `${(1 / zoom) * 100}%`, height: `${(1 / zoom) * 100}%` }}
+          >
+            {/* Camera */}
+            <div className="relative w-full lg:max-w-[640px]">
+              <div className="relative rounded-none lg:rounded-2xl overflow-hidden shadow-2xl">
+                <div className="relative rounded-none lg:rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
+                  <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: mirrored ? 'scaleX(-1)' : 'none', filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }} playsInline muted autoPlay />
+                  {!cameraActive && <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)"><Camera className="w-16 h-16 mb-4 opacity-20" /><p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p></div>}
+                  {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
+                  {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
+                  {isBursting && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /><span className="text-xs font-bold text-white">RECORDING</span></div>}
+                  {activeFilter !== 'none' && cameraActive && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10"><span className="text-[10px] text-white font-medium">{IMAGE_FILTERS.find(f => f.id === activeFilter)?.emoji} {IMAGE_FILTERS.find(f => f.id === activeFilter)?.label}</span></div>}
+                </div>
+              </div>
+              {/* Desktop capture button */}
+              {cameraActive && <div className="hidden lg:flex justify-center mt-4"><button onClick={handleCapture} disabled={countdown > 0 || isBursting} className="w-16 h-16 rounded-full border-4 border-(--overlay-border-hover) bg-white hover:bg-stone-100 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-xl disabled:opacity-50 touch-manipulation">{burstMode ? <Grid className="w-6 h-6 text-[#FF6B4A]" /> : <div className="w-10 h-10 rounded-full bg-[#FF6B4A]" />}</button></div>}
+            </div>
+
+            {/* Strip / Frame preview — always show when not in review mode */}
+            {!reviewMode && (
+              <div ref={previewRef}
+                className="relative rounded-2xl shadow-2xl w-full"
+                style={{
+                  maxWidth: activeCustomFrame ? '360px' : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid' ? '300px' : '240px',
+                  ...(activeCustomFrame ? {} : { aspectRatio: stripTemplate.id === 'polaroid' ? '5/6' : stripTemplate.id === 'grid2x2' ? '1/1' : '3/8' })
+                }}
+                onPointerMove={e => { onSlotMove(e) }}
+                onPointerUp={() => { onSlotUp() }}
+              >
+                {activeCustomFrame ? (
+                  <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} onSlotDown={onSlotDown} onSlotWheel={onSlotWheel} />
+                ) : (
+                  <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} />
+                )}
+                {/* Konva overlay layer for text/assets — stopPropagation prevents parent deselect */}
+                {previewDims.w > 0 && previewDims.h > 0 && (
+                  <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                    <OverlayCanvas
+                      ref={overlayRef}
+                      elements={overlays}
+                      setElements={setOverlays}
+                      selectedId={selectedOverlay}
+                      setSelectedId={setSelectedOverlay}
+                      width={previewDims.w}
+                      height={previewDims.h}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="pb-32 lg:pb-8" />
+          </div>
+        </div>
       </div>
+    </div>
 
       {/* ═══ MOBILE: Floating capture button ═══ */}
       {cameraActive && (
@@ -787,7 +863,7 @@ function StripCanvas({ template, photos, bg }: { template: StripTemplate; photos
         ctx.fillStyle = '#f0f0f0'; ctx.beginPath(); ctx.roundRect(pad, pad, W - pad * 2, H - pad - bPad, 4); ctx.fill()
         ctx.fillStyle = '#bbb'; ctx.font = 'bold 24px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText('Photo 1', W / 2, (H - bPad) / 2)
-        ctx.fillStyle = '#999'; ctx.font = '20px Georgia'; ctx.textAlign = 'center'
+        ctx.fillStyle = '#999'; ctx.font = '20px Lora'; ctx.textAlign = 'center'
         ctx.fillText(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), W / 2, H - bPad / 2 + 10)
       } else {
         const slotH = (H - pad * (slotCount + 1)) / slotCount

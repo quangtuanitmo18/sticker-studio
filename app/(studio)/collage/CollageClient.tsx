@@ -1,8 +1,8 @@
 'use client'
 
 import { AssetPanel } from '@/components/shared/AssetPanel'
-import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
+import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
 import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
 import { OverlayList } from '@/components/shared/OverlayList'
 import { TextPanel } from '@/components/shared/TextPanel'
@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast'
 import { useHistory } from '@/hooks/use-history'
 import { downloadUrl } from '@/lib/download'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
-import { Download, Grid, GripVertical, Layers, Loader2, Redo2, RotateCcw, Trash2, Type, Undo2, UploadCloud, X } from 'lucide-react'
+import { Download, Grid, GripVertical, Layers, Loader2, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, UploadCloud } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 
@@ -178,11 +178,13 @@ export default function CollagePage() {
   const [padding, setPadding] = useState(12)
   const [borderRadius, setBorderRadius] = useState(16)
   const [outputSize, setOutputSize] = useState(OUTPUT_SIZES[0])
+  const [showExport, setShowExport] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [overlays, setOverlays] = useState<CanvasElement[]>([])
   const [sideTab, setSideTab] = useState<SideTab>('layout')
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(1)
   const previewRef = useRef<HTMLDivElement>(null)
   const overlayRef = useRef<OverlayCanvasHandle>(null)
   const [previewDims, setPreviewDims] = useState({ w: 0, h: 0 })
@@ -260,6 +262,26 @@ export default function CollagePage() {
     setOverlays(newOverlays)
     history.set(newOverlays)
     if (selectedOverlay === id) setSelectedOverlay(null)
+  }
+
+  const selectedOv = overlays.find(o => o.id === selectedOverlay)
+
+  // Sync TextPanel when overlay is selected
+  useEffect(() => {
+    if (!selectedOv || selectedOv.type !== 'text') return
+    setSideTab('text')
+    setStickerText(selectedOv.text)
+    setFontFamily(selectedOv.fontFamily || 'Anton')
+    setFontSize(selectedOv.fontSize || 48)
+    setTextColor(selectedOv.fill || '#ffffff')
+    setTextStroke(selectedOv.stroke || '#000000')
+    setTextStrokeWidth(selectedOv.strokeWidth || 3)
+  }, [selectedOverlay]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update a property on the selected text element directly without relying on flaky useEffects
+  const updateSelectedText = (patch: Partial<CanvasElement>) => {
+    if (!selectedOverlay) return
+    setOverlays(prev => prev.map(o => o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o))
   }
 
   const handleUndo = () => {
@@ -551,19 +573,20 @@ export default function CollagePage() {
           {sideTab === 'text' && (
             <TextPanel
               text={stickerText}
-              onTextChange={setStickerText}
+              onTextChange={v => { setStickerText(v); updateSelectedText({ text: v }) }}
               fontFamily={fontFamily}
-              onFontChange={setFontFamily}
+              onFontChange={v => { setFontFamily(v); updateSelectedText({ fontFamily: v }) }}
               fontSize={fontSize}
-              onSizeChange={setFontSize}
+              onSizeChange={v => { setFontSize(v); updateSelectedText({ fontSize: v }) }}
               fillColor={textColor}
-              onFillChange={setTextColor}
+              onFillChange={v => { setTextColor(v); updateSelectedText({ fill: v }) }}
               strokeColor={textStroke}
-              onStrokeChange={setTextStroke}
+              onStrokeChange={v => { setTextStroke(v); updateSelectedText({ stroke: v }) }}
               strokeWidth={textStrokeWidth}
-              onStrokeWidthChange={setTextStrokeWidth}
+              onStrokeWidthChange={v => { setTextStrokeWidth(v); updateSelectedText({ strokeWidth: v }) }}
               onAddText={addTextOverlay}
               onAddPreset={addTextPreset}
+              selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined}
             />
           )}
 
@@ -581,22 +604,6 @@ export default function CollagePage() {
           />
 
           <div className="space-y-2 pt-2">
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" className="flex-1 text-(--text-tertiary)" onClick={handleUndo} disabled={!history.canUndo}>
-                <Undo2 className="w-4 h-4" /> Undo
-              </Button>
-              <Button variant="ghost" size="sm" className="flex-1 text-(--text-tertiary)" onClick={handleRedo} disabled={!history.canRedo}>
-                <Redo2 className="w-4 h-4" /> Redo
-              </Button>
-            </div>
-          <ExportFormatPanel
-            format={exportFormat}
-            onFormatChange={setExportFormat}
-            onExport={handleExport}
-            isExporting={isExporting}
-            disabled={images.length === 0}
-            exportLabel={`Export Collage (${outputSize.desc})`}
-          />
             <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary)" onClick={() => { setImages([]); setOverlays([]); setSelectedOverlay(null) }}>
               <RotateCcw className="w-4 h-4" /> Reset All
             </Button>
@@ -614,20 +621,74 @@ export default function CollagePage() {
 
       {/* ═══ MAIN AREA — Preview ═══ */}
       <div
-        className="flex-1 flex items-center justify-center p-2 lg:p-8 pb-52 lg:pb-8 bg-(--canvas-bg)"
-        onClick={() => setSelectedOverlay(null)}
+        className="flex-1 flex flex-col p-2 lg:p-8 pb-52 lg:pb-8 bg-(--canvas-bg) relative"
+        onClick={() => { setSelectedOverlay(null); setShowExport(false) }}
       >
-        <div
-          ref={previewRef}
-          className="relative shadow-2xl overflow-hidden"
-          style={{
-            width: `min(80vw, ${previewMaxW}px)`,
-            height: `min(80vh, ${previewMaxH}px)`,
-            background: bgGradient ? bgGradient.css : bgColor,
-            borderRadius: `${borderRadius}px`,
-            aspectRatio: `${outputSize.w} / ${outputSize.h}`,
-          }}
-        >
+        {/* Export Controls */}
+        <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
+          <button 
+            title="Export"
+            disabled={images.length === 0}
+            onClick={() => images.length > 0 && setShowExport(!showExport)} 
+            className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${images.length === 0 ? 'opacity-40 cursor-not-allowed bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-muted)]' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] cursor-pointer'}`}
+          >
+            <Download className="w-4 h-4" /> Export
+          </button>
+          {showExport && images.length > 0 && (
+            <div className="bg-[var(--panel-bg)] p-3 rounded-2xl shadow-xl border border-[var(--overlay-border)] w-48 animate-in fade-in slide-in-from-top-2">
+              <ExportFormatPanel
+                format={exportFormat}
+                onFormatChange={setExportFormat}
+                onExport={handleExport}
+                isExporting={isExporting}
+                disabled={images.length === 0}
+                exportLabel={`Export (${outputSize.desc})`}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Canvas Controls */}
+        <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
+          {/* Undo/Redo */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
+            <button title="Undo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
+            <button title="Redo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+          </div>
+          
+          {/* Zoom */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
+            <button onClick={(e) => { e.stopPropagation(); setZoom(Math.min(zoom + 0.1, 3)) }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Plus className="w-4 h-4" /></button>
+            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">{Math.round(zoom * 100)}%</div>
+            <button onClick={(e) => { e.stopPropagation(); setZoom(Math.max(zoom - 0.1, 0.5)) }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><div className="w-3 h-0.5 bg-current rounded-full" /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto rounded-xl">
+          <div 
+            style={{ 
+              width: `${Math.max(100, zoom * 100)}%`, 
+              height: `${Math.max(100, zoom * 100)}%`, 
+              display: 'flex', 
+              minWidth: '100%',
+              minHeight: '100%' 
+            }}
+          >
+          <div 
+            className="w-full h-full flex items-center justify-center p-4 origin-top-left transition-transform duration-200"
+            style={{ transform: `scale(${zoom})`, width: `${(1 / zoom) * 100}%`, height: `${(1 / zoom) * 100}%` }}
+          >
+            <div
+              ref={previewRef}
+              className="relative shadow-2xl overflow-hidden shrink-0"
+              style={{
+                width: `min(80vw, ${previewMaxW}px)`,
+                height: `min(80vh, ${previewMaxH}px)`,
+                background: bgGradient ? bgGradient.css : bgColor,
+                borderRadius: `${borderRadius}px`,
+                aspectRatio: `${outputSize.w} / ${outputSize.h}`,
+              }}
+            >
           {images.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)">
               <Grid className="w-12 h-12 mb-3 opacity-30" />
@@ -679,6 +740,9 @@ export default function CollagePage() {
           )}
         </div>
       </div>
+      </div>
+      </div>
+    </div>
 
       {/* ═══ MOBILE: Floating export button ═══ */}
       {images.length > 0 && (

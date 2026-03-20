@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { Stage, Layer, Image as KonvaImage, Text as KonvaText, Transformer, Line } from 'react-konva'
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react'
+import { Image as KonvaImage, Text as KonvaText, Layer, Line, Stage, Transformer } from 'react-konva'
 import useImage from 'use-image'
 
 // ─── Shared element type ───────────────────────────────────
@@ -112,6 +112,26 @@ function TextElement({ element, isSelected, onSelect, onChange, onDblClick, onDr
       trRef.current.getLayer().batchDraw()
     }
   }, [isSelected])
+
+  // Force Konva to re-render text when fontFamily changes (canvas font caching issue)
+  useEffect(() => {
+    const node = shapeRef.current
+    if (!node || !element.fontFamily) return
+    const font = element.fontFamily
+    // Load the font into the browser's font system, then force Konva to clear cache & redraw
+    document.fonts.load(`bold ${element.fontSize || 48}px "${font}"`).then(() => {
+      node.fontFamily(font)
+      node.clearCache()
+      const layer = node.getLayer()
+      if (layer) layer.batchDraw()
+    }).catch(() => {
+      // Font load failed (e.g. system font), still apply
+      node.fontFamily(font)
+      node.clearCache()
+      const layer = node.getLayer()
+      if (layer) layer.batchDraw()
+    })
+  }, [element.fontFamily, element.fontSize])
 
   return (
     <React.Fragment>
