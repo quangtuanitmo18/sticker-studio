@@ -1291,7 +1291,7 @@ export default function MakerPage() {
                     className="aspect-square bg-(--card-bg) rounded-lg border border-(--overlay-border) flex items-center justify-center p-1 cursor-pointer hover:border-[#FF6B4A]/30 hover:bg-(--card-bg-hover) transition-all"
                     onClick={() => handleAddTemplate(src)}
                   >
-                    <img src={src} alt="" className="w-full h-full object-contain" loading="lazy" />
+                    <img src={src} alt="Template category item" className="w-full h-full object-contain" loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -1598,7 +1598,7 @@ export default function MakerPage() {
                   {TEMPLATE_CATEGORIES[activeTemplateCategory].items.slice(0, 30).map((src, i) => (
                     <button key={i} onClick={() => handleAddTemplate(src)}
                       className="aspect-square rounded-lg bg-(--card-bg) border border-(--overlay-border) p-1 hover:bg-(--card-bg-hover) transition-all cursor-pointer">
-                      <img src={src} alt="" className="w-full h-full object-contain" />
+                      <img src={src} alt="Template thumbnail" className="w-full h-full object-contain" />
                     </button>
                   ))}
                 </div>

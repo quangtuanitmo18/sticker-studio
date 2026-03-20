@@ -453,7 +453,7 @@ export default function CollagePage() {
                         onDragOver={(e) => handleDragOver(e, idx)}
                         onDragEnd={handleDragEnd}
                       >
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        <img src={img.url} alt={`Uploaded image ${idx + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
                           <GripVertical className="w-3 h-3 text-white/60" />
                           <button onClick={() => removeImage(img.id)} className="cursor-pointer">
@@ -715,7 +715,7 @@ export default function CollagePage() {
                   }}
                 >
                   {img ? (
-                    <img src={img.url} alt="" className="w-full h-full object-cover" />
+                    <img src={img.url} alt={`Collage cell ${i + 1}`} className="w-full h-full object-cover" />
                   ) : (
                     <div className="flex items-center justify-center h-full text-(--text-muted) text-xs">
                       {i + 1}
