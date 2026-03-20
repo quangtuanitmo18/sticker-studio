@@ -1,8 +1,8 @@
 'use client'
 
 import { AssetPanel } from '@/components/shared/AssetPanel'
-import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
+import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
 import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
 import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
@@ -10,19 +10,21 @@ import { useToast } from '@/components/ui/toast'
 import { downloadUrl } from '@/lib/download'
 import { FILTER_CATEGORIES, IMAGE_FILTERS } from '@/lib/image-filters'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
-import type { FrameTemplate } from '../frame-editor/FrameEditorClient'
-import FrameEditorClient from '../frame-editor/FrameEditorClient'
 import {
-    Camera, CameraIcon, Download,
-    Eye, Frame,
-    FlipHorizontal2, Grid, Layers,
-    Loader2, Pencil, Plus,
+    Camera, CameraIcon,
+    Eye,
+    FlipHorizontal2,
+    Frame,
+    Grid, Layers,
+    Plus,
     RefreshCw, RotateCcw, Settings, Sparkles,
     SwitchCamera,
     Trash2, Type,
     X
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { FrameTemplate } from '../frame-editor/FrameEditorClient'
+import FrameEditorClient from '../frame-editor/FrameEditorClient'
 import {
     STRIP_BACKGROUNDS,
     STRIP_TEMPLATES,
@@ -664,17 +666,19 @@ export default function PhotoboothPage() {
             ) : (
               <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} />
             )}
-            {/* Konva overlay layer for text/assets */}
+            {/* Konva overlay layer for text/assets — stopPropagation prevents parent deselect */}
             {previewDims.w > 0 && previewDims.h > 0 && (
-              <OverlayCanvas
-                ref={overlayRef}
-                elements={overlays}
-                setElements={setOverlays}
-                selectedId={selectedOverlay}
-                setSelectedId={setSelectedOverlay}
-                width={previewDims.w}
-                height={previewDims.h}
-              />
+              <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                <OverlayCanvas
+                  ref={overlayRef}
+                  elements={overlays}
+                  setElements={setOverlays}
+                  selectedId={selectedOverlay}
+                  setSelectedId={setSelectedOverlay}
+                  width={previewDims.w}
+                  height={previewDims.h}
+                />
+              </div>
             )}
           </div>
         )}
