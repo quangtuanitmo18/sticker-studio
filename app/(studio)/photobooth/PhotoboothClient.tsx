@@ -282,7 +282,7 @@ export default function PhotoboothPage() {
     setSelectedOverlay(ov.id)
     if (ov.type === 'text') {
       setSideTab('text')
-      setStickerText(ov.text)
+      setStickerText(ov.text || '')
       setFontFamily(ov.fontFamily || 'Anton')
       setFontSize(ov.fontSize || 48)
       setTextColor(ov.fill || '#ffffff')
@@ -298,7 +298,7 @@ export default function PhotoboothPage() {
     if (!selectedOv) return
     if (selectedOv.type === 'text') {
       setSideTab('text')
-      setStickerText(selectedOv.text)
+      setStickerText(selectedOv.text || '')
       setFontFamily(selectedOv.fontFamily || 'Anton')
       setFontSize(selectedOv.fontSize || 48)
       setTextColor(selectedOv.fill || '#ffffff')

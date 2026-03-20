@@ -10,29 +10,29 @@ import { ANIMATION_PRESETS, createAnimatedGif } from '@/lib/gif-encoder'
 import { FILTER_CATEGORIES, IMAGE_FILTERS, applyFilterToImage } from '@/lib/image-filters'
 import { smartCrop } from '@/lib/smart-crop'
 import {
-    ChevronDown,
-    ChevronUp,
-    Download,
-    Frame,
-    GripVertical,
-    Instagram,
-    Layers,
-    LayoutTemplate,
-    LoaderCircle as Loader2,
-    Monitor,
-    Palette,
-    Plus,
-    Redo2,
-    Settings,
-    Share2,
-    Smartphone,
-    Square, Trash2,
-    Twitter,
-    Type,
-    Undo2,
-    UploadCloud,
-    Wand2,
-    ZoomIn, ZoomOut,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Frame,
+  GripVertical,
+  Instagram,
+  Layers,
+  LayoutTemplate,
+  LoaderCircle as Loader2,
+  Monitor,
+  Palette,
+  Plus,
+  Redo2,
+  Settings,
+  Share2,
+  Smartphone,
+  Square, Trash2,
+  Twitter,
+  Type,
+  Undo2,
+  UploadCloud,
+  Wand2,
+  ZoomIn, ZoomOut,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -329,7 +329,7 @@ export default function MakerPage() {
   useEffect(() => {
     if (!isTextSelected || !selectedElement) return
     setRightTab('text')
-    setStickerText(selectedElement.text)
+    setStickerText(selectedElement.text || '')
     setFontFamily(selectedElement.fontFamily || 'Anton')
     setFontSize(selectedElement.fontSize || 60)
     setTextColor(selectedElement.fill || '#ffffff')

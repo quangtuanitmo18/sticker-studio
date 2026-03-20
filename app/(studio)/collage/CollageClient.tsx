@@ -270,7 +270,7 @@ export default function CollagePage() {
   useEffect(() => {
     if (!selectedOv || selectedOv.type !== 'text') return
     setSideTab('text')
-    setStickerText(selectedOv.text)
+    setStickerText(selectedOv.text || '')
     setFontFamily(selectedOv.fontFamily || 'Anton')
     setFontSize(selectedOv.fontSize || 48)
     setTextColor(selectedOv.fill || '#ffffff')
