@@ -5,6 +5,7 @@ import { Upload, Video, Image as ImageIcon, Sparkles, Scissors, Type, Smile, Fra
 import { loadVideo, VideoMetadata, TrimRange, extractFramesForGif, TextOverlay, StickerOverlay, captureFrameAsDataUrl, TEXT_ANIMATION_PRESETS } from '@/lib/video-processor'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
+import { Slider } from '@/components/ui/slider'
 import VideoPreview from './VideoPreview'
 import TextTab from './components/TextTab'
 import StickersTab from './components/StickersTab'
@@ -146,55 +147,39 @@ export default function GifMakerClient() {
                   <p className="text-[10px] text-[var(--text-muted)] mb-3">
                     Adjust the start and end time of your GIF.
                   </p>
-                  <div className="flex flex-col gap-3 bg-[var(--card-bg)] p-3 rounded-md border border-[var(--overlay-border)]">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] text-[var(--text-secondary)] font-medium">
-                        <span>Start</span>
-                        <span className="tabular-nums">{trim.start.toFixed(1)}s</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={metadata.duration}
-                        step={0.1}
-                        value={trim.start}
-                        onChange={(e) => setTrim(prev => ({ ...prev, start: Math.min(Number(e.target.value), prev.end - 0.5) }))}
-                        className="w-full accent-[#FF6B4A]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] text-[var(--text-secondary)] font-medium">
-                        <span>End</span>
-                        <span className="tabular-nums">{trim.end.toFixed(1)}s</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={metadata.duration}
-                        step={0.1}
-                        value={trim.end}
-                        onChange={(e) => setTrim(prev => ({ ...prev, end: Math.max(Number(e.target.value), prev.start + 0.5) }))}
-                        className="w-full accent-[#FF6B4A]"
-                      />
-                    </div>
+                  <div className="flex flex-col gap-5 bg-[var(--card-bg)] p-4 rounded-md border border-[var(--overlay-border)]">
+                    <Slider
+                      label="Start"
+                      min={0}
+                      max={metadata.duration}
+                      step={0.1}
+                      value={Number(trim.start.toFixed(1))}
+                      onChange={(val) => setTrim(prev => ({ ...prev, start: Math.min(val, prev.end - 0.5) }))}
+                      unit="s"
+                    />
+                    <Slider
+                      label="End"
+                      min={0}
+                      max={metadata.duration}
+                      step={0.1}
+                      value={Number(trim.end.toFixed(1))}
+                      onChange={(val) => setTrim(prev => ({ ...prev, end: Math.max(val, prev.start + 0.5) }))}
+                      unit="s"
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t border-[var(--overlay-border)]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Playback Speed</label>
-                    <span className="text-xs tabular-nums text-[var(--text-secondary)]">{speed}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="3.0"
-                    step="0.1"
+                  <Slider
+                    label="Playback Speed"
+                    min={0.5}
+                    max={3.0}
+                    step={0.1}
                     value={speed}
-                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                    className="w-full accent-[#FF6B4A]"
+                    onChange={(val) => setSpeed(val)}
+                    unit="x"
                   />
-                  <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+                  <div className="flex justify-between text-[10px] text-[var(--text-muted)] px-1">
                     <span>0.5x</span>
                     <span>1x</span>
                     <span>3x</span>

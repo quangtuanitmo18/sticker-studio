@@ -135,7 +135,7 @@ export default function VideoPreview({
   const currentPct = (currentTime / duration) * 100
 
   return (
-    <div className="relative h-12 bg-white/5 rounded-md border border-white/10 overflow-hidden group select-none">
+    <div className="relative h-12 bg-black/40 rounded-md border border-[var(--overlay-border)] overflow-hidden group select-none">
       {/* Thumbnails */}
       <div className="absolute inset-0 flex overflow-hidden rounded opacity-80 pointer-events-none bg-black">
         {thumbnails.length > 0 ? (
@@ -164,7 +164,7 @@ export default function VideoPreview({
 
       {/* Active Trim Overlay */}
       <div 
-        className="absolute inset-y-0 bg-blue-500/20 border-y-2 border-blue-500 pointer-events-none z-10"
+        className="absolute inset-y-0 bg-[#FF6B4A]/20 border-y-2 border-[#FF6B4A] pointer-events-none z-10"
         style={{ left: `${trimStartPct}%`, width: `${trimEndPct - trimStartPct}%` }}
       />
 
