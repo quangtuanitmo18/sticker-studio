@@ -1,14 +1,18 @@
 'use client'
 
 import { AssetPanel } from '@/components/shared/AssetPanel'
+import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
+import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
+import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
+import { OverlayList } from '@/components/shared/OverlayList'
 import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { useHistory } from '@/hooks/use-history'
 import { downloadUrl } from '@/lib/download'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
-import { Download, Grid, GripVertical, Layers, Loader2, Redo2, RotateCcw, Trash2, Type, Undo2, UploadCloud, X } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { Download, Grid, GripVertical, Layers, Loader2, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, UploadCloud } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 
 // ─── Layout templates ────────────────────────────────────────
@@ -162,22 +166,7 @@ const OUTPUT_SIZES = [
   { id: 'post', label: 'Post', w: 1080, h: 1350, desc: '1080×1350' },
 ]
 
-// ─── Overlay types ───────────────────────────────────────────
-
-interface CollageOverlay {
-  id: string
-  type: 'asset' | 'text'
-  src?: string
-  text?: string
-  fontFamily?: string
-  fontSize?: number
-  fill?: string
-  stroke?: string
-  strokeWidth?: number
-  x: number
-  y: number
-  size: number
-}
+// CollageOverlay replaced by shared CanvasElement from OverlayCanvas
 
 type SideTab = 'layout' | 'text' | 'assets'
 
@@ -189,12 +178,17 @@ export default function CollagePage() {
   const [padding, setPadding] = useState(12)
   const [borderRadius, setBorderRadius] = useState(16)
   const [outputSize, setOutputSize] = useState(OUTPUT_SIZES[0])
+  const [showExport, setShowExport] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
-  const [overlays, setOverlays] = useState<CollageOverlay[]>([])
+  const [overlays, setOverlays] = useState<CanvasElement[]>([])
   const [sideTab, setSideTab] = useState<SideTab>('layout')
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(1)
   const previewRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<OverlayCanvasHandle>(null)
+  const [previewDims, setPreviewDims] = useState({ w: 0, h: 0 })
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
   const { toast } = useToast()
 
   // Text panel state
@@ -206,7 +200,7 @@ export default function CollagePage() {
   const [textStrokeWidth, setTextStrokeWidth] = useState(3)
 
   // Undo/redo
-  const history = useHistory<CollageOverlay[]>([])
+  const history = useHistory<CanvasElement[]>([])
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newImages = acceptedFiles.map(file => ({
@@ -242,53 +236,23 @@ export default function CollagePage() {
   }
   const handleDragEnd = () => setDragIdx(null)
 
-  // ─── Asset + Text overlay handlers ─────────────────────────
+  // ─── Asset + Text overlay handlers (Konva-based) ───────────
   const addAssetOverlay = (src: string) => {
-    const newOverlays = [...overlays, {
-      id: `ov-${Date.now()}`,
-      type: 'asset' as const,
-      src,
-      x: 50 + Math.random() * 20 - 10,
-      y: 50 + Math.random() * 20 - 10,
-      size: 15,
-    }]
+    const pw = previewDims.w || 300
+    const newOverlays: CanvasElement[] = [...overlays, { id: `ov-${Date.now()}`, type: 'image' as const, src, x: pw / 2 - 30 + Math.random() * 40 - 20, y: (previewDims.h || 300) / 2 - 30, width: 60, height: 60 }]
     setOverlays(newOverlays)
     history.set(newOverlays)
   }
 
   const addTextOverlay = (config: { text: string; fontFamily: string; fontSize: number; fill: string; stroke: string; strokeWidth: number }) => {
-    const newOverlays = [...overlays, {
-      id: `txt-${Date.now()}`,
-      type: 'text' as const,
-      text: config.text,
-      fontFamily: config.fontFamily,
-      fontSize: config.fontSize,
-      fill: config.fill,
-      stroke: config.stroke,
-      strokeWidth: config.strokeWidth,
-      x: 50,
-      y: 50,
-      size: 20,
-    }]
+    const newOverlays: CanvasElement[] = [...overlays, { id: `txt-${Date.now()}`, type: 'text' as const, text: config.text, fontFamily: config.fontFamily, fontSize: config.fontSize, fill: config.fill, stroke: config.stroke, strokeWidth: config.strokeWidth, x: (previewDims.w || 300) / 4, y: (previewDims.h || 300) / 2 }]
     setOverlays(newOverlays)
     history.set(newOverlays)
     setStickerText('')
   }
 
   const addTextPreset = (preset: typeof TEXT_PRESETS[0]) => {
-    const newOverlays = [...overlays, {
-      id: `txt-${Date.now()}`,
-      type: 'text' as const,
-      text: preset.label.split(' ').slice(1).join(' ') || preset.label,
-      fontFamily: preset.font,
-      fontSize: preset.size,
-      fill: preset.fill,
-      stroke: preset.stroke,
-      strokeWidth: preset.strokeWidth,
-      x: 50,
-      y: 50,
-      size: 20,
-    }]
+    const newOverlays: CanvasElement[] = [...overlays, { id: `txt-${Date.now()}`, type: 'text' as const, text: preset.label.split(' ').slice(1).join(' ') || preset.label, fontFamily: preset.font, fontSize: preset.size, fill: preset.fill, stroke: preset.stroke, strokeWidth: preset.strokeWidth, x: (previewDims.w || 300) / 4, y: (previewDims.h || 300) / 2 }]
     setOverlays(newOverlays)
     history.set(newOverlays)
   }
@@ -298,6 +262,26 @@ export default function CollagePage() {
     setOverlays(newOverlays)
     history.set(newOverlays)
     if (selectedOverlay === id) setSelectedOverlay(null)
+  }
+
+  const selectedOv = overlays.find(o => o.id === selectedOverlay)
+
+  // Sync TextPanel when overlay is selected
+  useEffect(() => {
+    if (!selectedOv || selectedOv.type !== 'text') return
+    setSideTab('text')
+    setStickerText(selectedOv.text || '')
+    setFontFamily(selectedOv.fontFamily || 'Anton')
+    setFontSize(selectedOv.fontSize || 48)
+    setTextColor(selectedOv.fill || '#ffffff')
+    setTextStroke(selectedOv.stroke || '#000000')
+    setTextStrokeWidth(selectedOv.strokeWidth || 3)
+  }, [selectedOverlay]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update a property on the selected text element directly without relying on flaky useEffects
+  const updateSelectedText = (patch: Partial<CanvasElement>) => {
+    if (!selectedOverlay) return
+    setOverlays(prev => prev.map(o => o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o))
   }
 
   const handleUndo = () => {
@@ -310,45 +294,18 @@ export default function CollagePage() {
     setOverlays(history.state)
   }
 
-  // ─── Draggable overlay on preview ──────────────────────────
-  const [draggingOverlayId, setDraggingOverlayId] = useState<string | null>(null)
-  const dragStartPos = useRef<{ x: number; y: number; ovX: number; ovY: number } | null>(null)
-
-  const handleOverlayPointerDown = (e: React.PointerEvent, ov: CollageOverlay) => {
-    e.stopPropagation()
-    e.preventDefault()
-    setDraggingOverlayId(ov.id)
-    setSelectedOverlay(ov.id)
-    dragStartPos.current = { x: e.clientX, y: e.clientY, ovX: ov.x, ovY: ov.y }
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-  }
-
-  const handleOverlayPointerMove = (e: React.PointerEvent) => {
-    if (!draggingOverlayId || !dragStartPos.current || !previewRef.current) return
-    const rect = previewRef.current.getBoundingClientRect()
-    const dx = ((e.clientX - dragStartPos.current.x) / rect.width) * 100
-    const dy = ((e.clientY - dragStartPos.current.y) / rect.height) * 100
-    const nx = Math.max(0, Math.min(100, dragStartPos.current.ovX + dx))
-    const ny = Math.max(0, Math.min(100, dragStartPos.current.ovY + dy))
-
-    setOverlays(prev => prev.map(o => o.id === draggingOverlayId ? { ...o, x: nx, y: ny } : o))
-  }
-
-  const handleOverlayPointerUp = () => {
-    if (draggingOverlayId) {
-      history.set([...overlays])
-    }
-    setDraggingOverlayId(null)
-    dragStartPos.current = null
-  }
-
-  // ─── Resize selected overlay ───────────────────────────────
-  const resizeOverlay = (id: string, delta: number) => {
-    setOverlays(prev => prev.map(o =>
-      o.id === id ? { ...o, size: Math.max(5, Math.min(60, o.size + delta)) } : o
-    ))
-  }
+  // Track preview container dimensions for Konva stage sizing
+  useEffect(() => {
+    const el = previewRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setPreviewDims({ w: entry.contentRect.width, h: entry.contentRect.height })
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Export ────────────────────────────────────────────────
   const handleExport = async () => {
@@ -402,34 +359,18 @@ export default function CollagePage() {
         ctx.restore()
       }
 
-      // Draw overlays
-      for (const ov of overlays) {
-        if (ov.type === 'asset' && ov.src) {
-          const img = await loadImage(ov.src)
-          const s = (ov.size / 100) * W
-          const ox = (ov.x / 100) * W - s / 2
-          const oy = (ov.y / 100) * H - s / 2
-          ctx.drawImage(img, ox, oy, s, s)
-        } else if (ov.type === 'text' && ov.text) {
-          const scale = W / 600
-          ctx.save()
-          ctx.font = `bold ${(ov.fontSize || 48) * scale}px ${ov.fontFamily || 'Impact'}`
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          if (ov.strokeWidth && ov.strokeWidth > 0) {
-            ctx.strokeStyle = ov.stroke || '#000000'
-            ctx.lineWidth = ov.strokeWidth * scale
-            ctx.strokeText(ov.text, (ov.x / 100) * W, (ov.y / 100) * H)
-          }
-          ctx.fillStyle = ov.fill || '#ffffff'
-          ctx.fillText(ov.text, (ov.x / 100) * W, (ov.y / 100) * H)
-          ctx.restore()
+      // Composite Konva overlay layer
+      if (overlays.length > 0 && overlayRef.current) {
+        const overlayDataUrl = await overlayRef.current.exportOverlay(W, H)
+        if (overlayDataUrl) {
+          const overlayImg = await loadImage(overlayDataUrl)
+          ctx.drawImage(overlayImg, 0, 0, W, H)
         }
       }
 
-      const dataUrl = canvas.toDataURL('image/png')
-      downloadUrl(dataUrl, `collage_${outputSize.id}.png`)
-      toast('Collage exported!', 'success')
+      const dataUrl = canvasToExportDataUrl(canvas, exportFormat)
+      downloadUrl(dataUrl, `collage_${outputSize.id}.${exportFormat}`)
+      toast(`Collage exported as ${exportFormat.toUpperCase()}!`, 'success')
     } catch (err) {
       console.error('Export error:', err)
       toast('Export failed. Please try again.', 'error')
@@ -455,17 +396,17 @@ export default function CollagePage() {
         {/* Header */}
         <div className="p-3 lg:p-5 pb-2 lg:pb-3">
           <div className="hidden lg:flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EC4899] to-[#F59E0B] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-linear-to-br from-[#EC4899] to-[#F59E0B] flex items-center justify-center">
               <Grid className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">Collage Maker</h2>
-              <p className="text-xs text-[var(--text-muted)]">Combine images into one design</p>
+              <h2 className="text-lg font-bold text-(--text-primary)">Collage Maker</h2>
+              <p className="text-xs text-(--text-muted)">Combine images into one design</p>
             </div>
           </div>
 
           {/* Tab switcher */}
-          <div className="flex gap-1 bg-[var(--card-bg)] rounded-xl p-1">
+          <div className="flex gap-1 bg-(--card-bg) rounded-xl p-1">
             {SIDE_TABS.map(tab => (
               <button
                 key={tab.id}
@@ -473,7 +414,7 @@ export default function CollagePage() {
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                   sideTab === tab.id
                     ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                    : 'text-(--text-muted) hover:text-(--text-secondary)'
                 }`}
               >
                 {tab.icon} {tab.label}
@@ -488,15 +429,15 @@ export default function CollagePage() {
             <>
               {/* Upload */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
                   Images ({images.length}/{layout.cells})
                 </label>
                 <div {...getRootProps()} className={`rounded-xl border-2 border-dashed py-5 flex flex-col items-center cursor-pointer transition-all
-                  ${isDragActive ? 'border-[#FF6B4A] bg-[#FF6B4A]/5' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)]'}`}
+                  ${isDragActive ? 'border-[#FF6B4A] bg-[#FF6B4A]/5' : 'border-(--overlay-border) hover:border-(--overlay-border-hover)'}`}
                 >
                   <input {...getInputProps()} />
-                  <UploadCloud className="w-5 h-5 text-[var(--text-muted)] mb-1.5" />
-                  <p className="text-xs text-[var(--text-tertiary)]">{isDragActive ? 'Drop here' : 'Drop images or click to upload'}</p>
+                  <UploadCloud className="w-5 h-5 text-(--text-muted) mb-1.5" />
+                  <p className="text-xs text-(--text-tertiary)">{isDragActive ? 'Drop here' : 'Drop images or click to upload'}</p>
                 </div>
 
                 {images.length > 0 && (
@@ -512,7 +453,7 @@ export default function CollagePage() {
                         onDragOver={(e) => handleDragOver(e, idx)}
                         onDragEnd={handleDragEnd}
                       >
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        <img src={img.url} alt={`Uploaded image ${idx + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
                           <GripVertical className="w-3 h-3 text-white/60" />
                           <button onClick={() => removeImage(img.id)} className="cursor-pointer">
@@ -528,7 +469,7 @@ export default function CollagePage() {
 
               {/* Layout */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">Layout</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Layout</label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {LAYOUTS.map(l => (
                     <button
@@ -537,7 +478,7 @@ export default function CollagePage() {
                       className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${
                         layout.id === l.id
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
+                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
                       }`}
                     >
                       <span className="text-base block">{l.emoji}</span>
@@ -549,7 +490,7 @@ export default function CollagePage() {
 
               {/* Output size */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">Output Size</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Output Size</label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {OUTPUT_SIZES.map(s => (
                     <button
@@ -558,7 +499,7 @@ export default function CollagePage() {
                       className={`py-2 rounded-lg text-center transition-all cursor-pointer ${
                         outputSize.id === s.id
                           ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
+                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
                       }`}
                     >
                       <span className="text-[10px] font-semibold block">{s.label}</span>
@@ -570,35 +511,35 @@ export default function CollagePage() {
 
               {/* Background solid */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">Background</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Background</label>
                 <div className="grid grid-cols-5 gap-1.5">
                   {BG_COLORS.map(color => (
                     <button
                       key={color}
                       onClick={() => { setBgColor(color); setBgGradient(null) }}
                       className={`aspect-square rounded-lg border-2 transition-all cursor-pointer ${
-                        bgColor === color && !bgGradient ? 'border-[#FF6B4A] scale-110' : 'border-[var(--overlay-border)]'
+                        bgColor === color && !bgGradient ? 'border-[#FF6B4A] scale-110' : 'border-(--overlay-border)'
                       }`}
                       style={{ backgroundColor: color }}
                     />
                   ))}
                 </div>
                 <div className="flex items-center gap-2 mt-2">
-                  <input type="color" value={bgColor} onChange={e => { setBgColor(e.target.value); setBgGradient(null) }} className="w-7 h-7 rounded cursor-pointer border border-[var(--overlay-border)]" />
-                  <span className="text-xs text-[var(--text-muted)] font-mono uppercase">{bgGradient ? bgGradient.label : bgColor}</span>
+                  <input type="color" value={bgColor} onChange={e => { setBgColor(e.target.value); setBgGradient(null) }} className="w-7 h-7 rounded cursor-pointer border border-(--overlay-border)" />
+                  <span className="text-xs text-(--text-muted) font-mono uppercase">{bgGradient ? bgGradient.label : bgColor}</span>
                 </div>
               </div>
 
               {/* Gradients */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">Gradients</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Gradients</label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {BG_GRADIENTS.map(g => (
                     <button
                       key={g.id}
                       onClick={() => setBgGradient(g)}
                       className={`h-10 rounded-lg border-2 transition-all cursor-pointer ${
-                        bgGradient?.id === g.id ? 'border-[#FF6B4A] scale-105' : 'border-[var(--overlay-border)]'
+                        bgGradient?.id === g.id ? 'border-[#FF6B4A] scale-105' : 'border-(--overlay-border)'
                       }`}
                       style={{ background: g.css }}
                       title={g.label}
@@ -609,7 +550,7 @@ export default function CollagePage() {
 
               {/* Spacing */}
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1 block">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-1 block">
                   Padding: {padding}px
                 </label>
                 <input type="range" min="0" max="40" value={padding} onChange={e => setPadding(Number(e.target.value))}
@@ -618,7 +559,7 @@ export default function CollagePage() {
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1 block">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-1 block">
                   Corners: {borderRadius}px
                 </label>
                 <input type="range" min="0" max="40" value={borderRadius} onChange={e => setBorderRadius(Number(e.target.value))}
@@ -632,19 +573,20 @@ export default function CollagePage() {
           {sideTab === 'text' && (
             <TextPanel
               text={stickerText}
-              onTextChange={setStickerText}
+              onTextChange={v => { setStickerText(v); updateSelectedText({ text: v }) }}
               fontFamily={fontFamily}
-              onFontChange={setFontFamily}
+              onFontChange={v => { setFontFamily(v); updateSelectedText({ fontFamily: v }) }}
               fontSize={fontSize}
-              onSizeChange={setFontSize}
+              onSizeChange={v => { setFontSize(v); updateSelectedText({ fontSize: v }) }}
               fillColor={textColor}
-              onFillChange={setTextColor}
+              onFillChange={v => { setTextColor(v); updateSelectedText({ fill: v }) }}
               strokeColor={textStroke}
-              onStrokeChange={setTextStroke}
+              onStrokeChange={v => { setTextStroke(v); updateSelectedText({ stroke: v }) }}
               strokeWidth={textStrokeWidth}
-              onStrokeWidthChange={setTextStrokeWidth}
+              onStrokeWidthChange={v => { setTextStrokeWidth(v); updateSelectedText({ strokeWidth: v }) }}
               onAddText={addTextOverlay}
               onAddPreset={addTextPreset}
+              selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined}
             />
           )}
 
@@ -653,60 +595,16 @@ export default function CollagePage() {
             <AssetPanel onAddAsset={addAssetOverlay} />
           )}
 
-          {/* Overlay list + Undo/Redo + Actions — always visible */}
-          {overlays.length > 0 && (
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 block">
-                Overlays ({overlays.length})
-              </label>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {overlays.map(ov => (
-                  <div
-                    key={ov.id}
-                    onClick={() => setSelectedOverlay(ov.id === selectedOverlay ? null : ov.id)}
-                    className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border transition-all cursor-pointer ${
-                      selectedOverlay === ov.id
-                        ? 'bg-[#FF6B4A]/10 border-[#FF6B4A]/20'
-                        : 'bg-[var(--card-bg)] border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'
-                    }`}
-                  >
-                    {ov.type === 'asset' && ov.src ? (
-                      <img src={ov.src} alt="" className="w-5 h-5 shrink-0" />
-                    ) : (
-                      <Type className="w-4 h-4 text-[var(--text-tertiary)] shrink-0" />
-                    )}
-                    <span className="text-xs text-[var(--text-secondary)] flex-1 truncate" style={ov.type === 'text' ? { fontFamily: ov.fontFamily, color: ov.fill } : undefined}>
-                      {ov.type === 'text' ? ov.text : 'Sticker'}
-                    </span>
-                    {selectedOverlay === ov.id && (
-                      <div className="flex items-center gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); resizeOverlay(ov.id, -2) }} className="w-5 h-5 rounded bg-[var(--card-bg-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white text-[10px] cursor-pointer">−</button>
-                        <button onClick={(e) => { e.stopPropagation(); resizeOverlay(ov.id, 2) }} className="w-5 h-5 rounded bg-[var(--card-bg-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white text-[10px] cursor-pointer">+</button>
-                      </div>
-                    )}
-                    <button onClick={(e) => { e.stopPropagation(); removeOverlay(ov.id) }} className="cursor-pointer">
-                      <X className="w-3 h-3 text-[var(--text-tertiary)] hover:text-white" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Overlay list — shared component */}
+          <OverlayList
+            overlays={overlays}
+            selectedId={selectedOverlay}
+            onSelect={setSelectedOverlay}
+            onRemove={removeOverlay}
+          />
 
           <div className="space-y-2 pt-2">
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" className="flex-1 text-[var(--text-tertiary)]" onClick={handleUndo} disabled={!history.canUndo}>
-                <Undo2 className="w-4 h-4" /> Undo
-              </Button>
-              <Button variant="ghost" size="sm" className="flex-1 text-[var(--text-tertiary)]" onClick={handleRedo} disabled={!history.canRedo}>
-                <Redo2 className="w-4 h-4" /> Redo
-              </Button>
-            </div>
-            <Button className="w-full gap-2" onClick={handleExport} disabled={images.length === 0 || isExporting}>
-              {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Export Collage ({outputSize.desc})
-            </Button>
-            <Button variant="ghost" size="sm" className="w-full text-[var(--text-tertiary)]" onClick={() => { setImages([]); setOverlays([]); setSelectedOverlay(null) }}>
+            <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary)" onClick={() => { setImages([]); setOverlays([]); setSelectedOverlay(null) }}>
               <RotateCcw className="w-4 h-4" /> Reset All
             </Button>
           </div>
@@ -717,30 +615,82 @@ export default function CollagePage() {
   return (
     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
       {/* ═══ DESKTOP SIDEBAR — hidden on mobile ═══ */}
-      <div className="hidden lg:flex lg:w-[340px] shrink-0 bg-[var(--panel-bg)] border-r border-[var(--overlay-border)] overflow-y-auto h-screen flex-col">
+      <div className="hidden lg:flex lg:w-[340px] shrink-0 bg-(--panel-bg) border-r border-(--overlay-border) overflow-y-auto h-screen flex-col">
         {sidebarContent}
       </div>
 
       {/* ═══ MAIN AREA — Preview ═══ */}
       <div
-        className="flex-1 flex items-center justify-center p-2 lg:p-8 pb-52 lg:pb-8 bg-[var(--canvas-bg)]"
-        onClick={() => setSelectedOverlay(null)}
+        className="flex-1 flex flex-col p-2 lg:p-8 pb-52 lg:pb-8 bg-(--canvas-bg) relative"
+        onClick={() => { setSelectedOverlay(null); setShowExport(false) }}
       >
-        <div
-          ref={previewRef}
-          className="relative shadow-2xl overflow-hidden"
-          style={{
-            width: `min(80vw, ${previewMaxW}px)`,
-            height: `min(80vh, ${previewMaxH}px)`,
-            background: bgGradient ? bgGradient.css : bgColor,
-            borderRadius: `${borderRadius}px`,
-            aspectRatio: `${outputSize.w} / ${outputSize.h}`,
-          }}
-          onPointerMove={handleOverlayPointerMove}
-          onPointerUp={handleOverlayPointerUp}
-        >
+        {/* Export Controls */}
+        <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
+          <button 
+            title="Export"
+            disabled={images.length === 0}
+            onClick={() => images.length > 0 && setShowExport(!showExport)} 
+            className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${images.length === 0 ? 'opacity-40 cursor-not-allowed bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-muted)]' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] cursor-pointer'}`}
+          >
+            <Download className="w-4 h-4" /> Export
+          </button>
+          {showExport && images.length > 0 && (
+            <div className="bg-[var(--panel-bg)] p-3 rounded-2xl shadow-xl border border-[var(--overlay-border)] w-48 animate-in fade-in slide-in-from-top-2">
+              <ExportFormatPanel
+                format={exportFormat}
+                onFormatChange={setExportFormat}
+                onExport={handleExport}
+                isExporting={isExporting}
+                disabled={images.length === 0}
+                exportLabel={`Export (${outputSize.desc})`}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Canvas Controls */}
+        <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
+          {/* Undo/Redo */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
+            <button title="Undo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
+            <button title="Redo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+          </div>
+          
+          {/* Zoom */}
+          <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
+            <button onClick={(e) => { e.stopPropagation(); setZoom(Math.min(zoom + 0.1, 3)) }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Plus className="w-4 h-4" /></button>
+            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">{Math.round(zoom * 100)}%</div>
+            <button onClick={(e) => { e.stopPropagation(); setZoom(Math.max(zoom - 0.1, 0.5)) }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><div className="w-3 h-0.5 bg-current rounded-full" /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto rounded-xl">
+          <div 
+            style={{ 
+              width: `${Math.max(100, zoom * 100)}%`, 
+              height: `${Math.max(100, zoom * 100)}%`, 
+              display: 'flex', 
+              minWidth: '100%',
+              minHeight: '100%' 
+            }}
+          >
+          <div 
+            className="w-full h-full flex items-center justify-center p-4 origin-top-left transition-transform duration-200"
+            style={{ transform: `scale(${zoom})`, width: `${(1 / zoom) * 100}%`, height: `${(1 / zoom) * 100}%` }}
+          >
+            <div
+              ref={previewRef}
+              className="relative shadow-2xl overflow-hidden shrink-0"
+              style={{
+                width: `min(80vw, ${previewMaxW}px)`,
+                height: `min(80vh, ${previewMaxH}px)`,
+                background: bgGradient ? bgGradient.css : bgColor,
+                borderRadius: `${borderRadius}px`,
+                aspectRatio: `${outputSize.w} / ${outputSize.h}`,
+              }}
+            >
           {images.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-muted)]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)">
               <Grid className="w-12 h-12 mb-3 opacity-30" />
               <p className="text-sm font-medium">Upload images to start</p>
               <p className="text-xs opacity-50 mt-1">Select a layout and add {layout.cells} images</p>
@@ -765,9 +715,9 @@ export default function CollagePage() {
                   }}
                 >
                   {img ? (
-                    <img src={img.url} alt="" className="w-full h-full object-cover" />
+                    <img src={img.url} alt={`Collage cell ${i + 1}`} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-xs">
+                    <div className="flex items-center justify-center h-full text-(--text-muted) text-xs">
                       {i + 1}
                     </div>
                   )}
@@ -776,55 +726,27 @@ export default function CollagePage() {
             })
           )}
 
-          {/* Draggable overlays in preview */}
-          {overlays.map(ov => (
-            <div
-              key={ov.id}
-              className={`absolute cursor-grab active:cursor-grabbing select-none ${
-                selectedOverlay === ov.id ? 'ring-2 ring-[#FF6B4A] ring-offset-1 ring-offset-transparent' : ''
-              }`}
-              style={{
-                left: `${ov.x}%`,
-                top: `${ov.y}%`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: draggingOverlayId === ov.id ? 50 : 10,
-              }}
-              onPointerDown={(e) => handleOverlayPointerDown(e, ov)}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {ov.type === 'asset' && ov.src ? (
-                <img
-                  src={ov.src}
-                  alt=""
-                  className="pointer-events-none"
-                  style={{ width: `${ov.size * 3}px`, height: `${ov.size * 3}px` }}
-                  draggable={false}
-                />
-              ) : (
-                <span
-                  className="pointer-events-none whitespace-nowrap"
-                  style={{
-                    fontFamily: ov.fontFamily || 'Impact',
-                    fontSize: `${(ov.fontSize || 48) * 0.5}px`,
-                    fontWeight: 'bold',
-                    color: ov.fill || '#ffffff',
-                    textShadow: ov.strokeWidth && ov.strokeWidth > 0
-                      ? `0 0 ${ov.strokeWidth}px ${ov.stroke || '#000'}, 0 0 ${ov.strokeWidth * 2}px ${ov.stroke || '#000'}`
-                      : undefined,
-                    WebkitTextStroke: ov.strokeWidth && ov.strokeWidth > 0 ? `${ov.strokeWidth * 0.5}px ${ov.stroke || '#000'}` : undefined,
-                  }}
-                >
-                  {ov.text}
-                </span>
-              )}
-            </div>
-          ))}
+          {/* Konva overlay layer for text/assets */}
+          {previewDims.w > 0 && previewDims.h > 0 && (
+            <OverlayCanvas
+              ref={overlayRef}
+              elements={overlays}
+              setElements={setOverlays}
+              selectedId={selectedOverlay}
+              setSelectedId={setSelectedOverlay}
+              width={previewDims.w}
+              height={previewDims.h}
+            />
+          )}
         </div>
       </div>
+      </div>
+      </div>
+    </div>
 
       {/* ═══ MOBILE: Floating export button ═══ */}
       {images.length > 0 && (
-        <div className="lg:hidden fixed bottom-[200px] md:bottom-[140px] left-1/2 -translate-x-1/2 z-[52]">
+        <div className="lg:hidden fixed bottom-[200px] md:bottom-[140px] left-1/2 -translate-x-1/2 z-52">
           <button onClick={handleExport} disabled={isExporting}
             className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF6B4A] text-white font-semibold text-sm shadow-[0_4px_24px_rgba(255,107,74,0.4)] active:scale-95 transition-all touch-manipulation disabled:opacity-50">
             {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -869,7 +791,7 @@ function CollageMobileSheet({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-[51] bg-[var(--panel-bg)] border-t border-[var(--overlay-border)] rounded-t-2xl shadow-[0_-4px_30px_rgba(0,0,0,0.3)] flex flex-col"
+      className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-[51] bg-(--panel-bg) border-t border-(--overlay-border) rounded-t-2xl shadow-[0_-4px_30px_rgba(0,0,0,0.3)] flex flex-col"
       style={{ height: expanded ? '55vh' : '110px', transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)' }}
     >
       <div className="shrink-0 flex items-center justify-center py-2.5 cursor-grab active:cursor-grabbing touch-manipulation" onPointerDown={onDragStart} onClick={() => setExpanded(v => !v)}>

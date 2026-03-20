@@ -133,7 +133,7 @@ export default function StudioLayout({ children }: { children: React.ReactNode }
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto">
+      <main className="flex-1 flex flex-col h-full overflow-hidden">
         {children}
       </main>
 

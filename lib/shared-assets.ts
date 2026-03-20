@@ -4,25 +4,25 @@ export const emoji = (code: string) => `https://cdnjs.cloudflare.com/ajax/libs/t
 export const dicebear = (style: string, seed: string) => `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&backgroundColor=transparent`
 
 export const FONTS = [
-  { value: 'Impact', label: 'Impact', sample: 'BOLD' },
-  { value: 'Arial Black', label: 'Arial Black', sample: 'THICK' },
-  { value: 'Comic Sans MS', label: 'Comic Sans', sample: 'Fun!' },
-  { value: 'Courier New', label: 'Courier', sample: 'CODE' },
-  { value: 'Georgia', label: 'Georgia', sample: 'Serif' },
-  { value: 'Verdana', label: 'Verdana', sample: 'Clean' },
-  { value: 'Trebuchet MS', label: 'Trebuchet', sample: 'Modern' },
-  { value: 'Lucida Console', label: 'Lucida', sample: 'MONO' },
+  { value: 'Anton', label: 'Anton', sample: 'BOLD' },
+  { value: 'Archivo Black', label: 'Archivo Black', sample: 'THICK' },
+  { value: 'Comic Neue', label: 'Comic Neue', sample: 'Fun!' },
+  { value: 'Courier Prime', label: 'Courier Prime', sample: 'CODE' },
+  { value: 'Lora', label: 'Lora', sample: 'Serif' },
+  { value: 'Nunito', label: 'Nunito', sample: 'Clean' },
+  { value: 'Fira Sans', label: 'Fira Sans', sample: 'Modern' },
+  { value: 'Fira Code', label: 'Fira Code', sample: 'MONO' },
 ]
 
 export const TEXT_PRESETS = [
-  { label: '🔥 Meme', font: 'Impact', fill: '#ffffff', stroke: '#000000', strokeWidth: 3, size: 72 },
-  { label: '✨ Neon', font: 'Arial Black', fill: '#00e5ff', stroke: '#000000', strokeWidth: 2, size: 60 },
-  { label: '💖 Pop', font: 'Comic Sans MS', fill: '#ff4081', stroke: '#ffffff', strokeWidth: 2, size: 56 },
-  { label: '🎮 Cyber', font: 'Courier New', fill: '#39ff14', stroke: '#000000', strokeWidth: 2, size: 48 },
-  { label: '⚡ Bold', font: 'Arial Black', fill: '#F59E0B', stroke: '#000000', strokeWidth: 3, size: 64 },
-  { label: '🌊 Wave', font: 'Georgia', fill: '#60a5fa', stroke: '#1e3a5f', strokeWidth: 2, size: 52 },
-  { label: '🍿 Fun', font: 'Comic Sans MS', fill: '#ffeb3b', stroke: '#ff9800', strokeWidth: 2, size: 60 },
-  { label: '❄️ Frost', font: 'Verdana', fill: '#e0f7fa', stroke: '#006064', strokeWidth: 2, size: 50 },
+  { label: '🔥 Meme', font: 'Anton', fill: '#ffffff', stroke: '#000000', strokeWidth: 3, size: 72 },
+  { label: '✨ Neon', font: 'Archivo Black', fill: '#00e5ff', stroke: '#000000', strokeWidth: 2, size: 60 },
+  { label: '💖 Pop', font: 'Comic Neue', fill: '#ff4081', stroke: '#ffffff', strokeWidth: 2, size: 56 },
+  { label: '🎮 Cyber', font: 'Courier Prime', fill: '#39ff14', stroke: '#000000', strokeWidth: 2, size: 48 },
+  { label: '⚡ Bold', font: 'Archivo Black', fill: '#F59E0B', stroke: '#000000', strokeWidth: 3, size: 64 },
+  { label: '🌊 Wave', font: 'Lora', fill: '#60a5fa', stroke: '#1e3a5f', strokeWidth: 2, size: 52 },
+  { label: '🍿 Fun', font: 'Comic Neue', fill: '#ffeb3b', stroke: '#ff9800', strokeWidth: 2, size: 60 },
+  { label: '❄️ Frost', font: 'Nunito', fill: '#e0f7fa', stroke: '#006064', strokeWidth: 2, size: 50 },
 ]
 
 export const TEMPLATE_CATEGORIES = {

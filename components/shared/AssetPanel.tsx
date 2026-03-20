@@ -22,7 +22,7 @@ export function AssetPanel({ onAddAsset }: AssetPanelProps) {
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-4 gap-1.5 max-h-[500px] overflow-y-auto">
+      <div className="grid grid-cols-6 gap-1.5 max-h-[500px] overflow-y-auto">
         {TEMPLATE_CATEGORIES[activeCategory].items.map((src, idx) => (
           <div key={idx} onClick={() => onAddAsset(src)}
             className="aspect-square bg-[var(--card-bg)] rounded-lg border border-[var(--overlay-border)] flex items-center justify-center p-1 cursor-pointer hover:border-[#FF6B4A]/30 hover:bg-[var(--card-bg-hover)] transition-all">

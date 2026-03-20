@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Comic+Neue:wght@400;700&family=Courier+Prime:wght@400;700&family=Fira+Code:wght@400;700&family=Fira+Sans:wght@400;700&family=Lora:wght@400;700&family=Nunito:wght@400;700&display=swap');
 @import "tailwindcss";
 
 /* ─── Design Tokens ──────────────────────────────────────── */
@@ -260,7 +261,8 @@ input[type="range"]::-moz-range-thumb {
 .studio-layout {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {

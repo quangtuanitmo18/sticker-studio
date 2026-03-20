@@ -14,7 +14,14 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 /** Download from a URL (data: or blob: or https:) */
-export function downloadUrl(url: string, filename: string) {
+export async function downloadUrl(url: string, filename: string) {
+  // Chrome ignores `download` attr on large data: URLs — convert to blob first
+  if (url.startsWith('data:')) {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    downloadBlob(blob, filename)
+    return
+  }
   const a = document.createElement('a')
   a.href = url
   a.download = filename
