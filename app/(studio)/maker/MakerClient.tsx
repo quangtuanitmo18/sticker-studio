@@ -1,5 +1,7 @@
 'use client'
 
+import { PanelSection } from '@/components/shared/PanelSection'
+import { SidebarHeader } from '@/components/shared/SidebarHeader'
 import { Loading } from '@/components/ui/Loading'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
@@ -251,19 +253,6 @@ const RIGHT_TABS = [
   { key: 'export' as RightTab, icon: Share2, label: 'Export' },
 ]
 
-// ─── UI Helpers (module-level to prevent remount) ──────────
-function PanelLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">{children}</label>
-}
-
-function PanelSection({ title, children }: { title: string, children: React.ReactNode }) {
-  return (
-    <div className="border-b border-(--overlay-border) pb-4 mb-4 last:border-0 last:mb-0 last:pb-0">
-      <PanelLabel>{title}</PanelLabel>
-      {children}
-    </div>
-  )
-}
 
 // ─── Component ─────────────────────────────────────────────
 export default function MakerPage() {
@@ -823,6 +812,15 @@ export default function MakerPage() {
 
       {/* ════════ LEFT PANEL ════════ */}
       <div className="hidden md:flex w-[280px] shrink-0 bg-(--panel-bg) border-r border-(--overlay-border) flex-col overflow-hidden">
+        {/* Header */}
+        <SidebarHeader
+          gradient="from-[#FF6B4A] to-[#F59E0B]"
+          icon={<Layers className="w-4.5 h-4.5 text-white" />}
+          title="Sticker Maker"
+          subtitle="Create & customize stickers"
+          onReset={handleReset}
+          className="p-4 pb-3 border-b border-(--overlay-border)"
+        />
         {/* Tab strip */}
         <div className="flex border-b border-(--overlay-border)">
           {LEFT_TABS.map(tab => (
@@ -882,9 +880,6 @@ export default function MakerPage() {
                     <input {...getInputProps()} />
                     <Button variant="outline" size="sm" className="w-full"><UploadCloud className="w-4 h-4" /> Replace Image</Button>
                   </div>
-                  <Button variant="ghost" size="sm" className="w-full text-red-400 hover:text-red-300" onClick={handleReset}>
-                    <Trash2 className="w-4 h-4" /> Start Over
-                  </Button>
                 </div>
               </PanelSection>
             </div>
@@ -1284,7 +1279,7 @@ export default function MakerPage() {
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-4 gap-1.5 max-h-[500px] overflow-y-auto">
+              <div className="grid grid-cols-6 gap-1.5 max-h-[500px] overflow-y-auto">
                 {TEMPLATE_CATEGORIES[activeTemplateCategory].items.map((src, idx) => (
                   <div
                     key={idx}

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@google/genai": "^1.45.0",
     "@imgly/background-removal": "^1.7.0",
     "@phosphor-icons/react": "^2.1.10",
@@ -22,6 +23,7 @@
     "lucide-react": "^0.474.0",
     "motion": "^12.0.0",
     "next": "15.1.11",
+    "play-dl": "^1.9.7",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-dropzone": "^15.0.0",
@@ -31,6 +33,9 @@
     "three": "^0.173.0",
     "three-stdlib": "^2.36.1",
     "use-image": "^1.1.4",
+    "youtube-dl-exec": "^3.1.4",
+    "youtube-ext": "^1.1.25",
+    "youtubei.js": "^17.0.1",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

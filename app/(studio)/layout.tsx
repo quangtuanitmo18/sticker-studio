@@ -1,7 +1,7 @@
 'use client'
 
 import { useTheme } from '@/hooks/use-theme'
-import { ArrowLeft, Camera, Grid, Package, Scissors, Sparkles, User } from 'lucide-react'
+import { ArrowLeft, Camera, Grid, Package, Scissors, Sparkles, User, Film } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -12,6 +12,7 @@ const NAV_GROUPS = [
       { href: '/maker', icon: Scissors, label: 'Sticker Maker' },
       { href: '/pack-gen', icon: Sparkles, label: 'AI Sticker Pack' },
       { href: '/sticker-pack', icon: Package, label: '3D Avatar Pack' },
+      { href: '/gif-maker', icon: Film, label: 'GIF Maker' },
     ],
   },
   {
