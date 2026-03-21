@@ -5,6 +5,8 @@ import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
 import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
 import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
 import { OverlayList } from '@/components/shared/OverlayList'
+import { SidebarHeader } from '@/components/shared/SidebarHeader'
+import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
 import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
@@ -396,31 +398,21 @@ export default function CollagePage() {
         {/* Header */}
         <div className="p-3 lg:p-5 pb-2 lg:pb-3">
           <div className="hidden lg:flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-linear-to-br from-[#EC4899] to-[#F59E0B] flex items-center justify-center">
-              <Grid className="w-4.5 h-4.5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-(--text-primary)">Collage Maker</h2>
-              <p className="text-xs text-(--text-muted)">Combine images into one design</p>
-            </div>
+            <SidebarHeader
+              gradient="from-[#EC4899] to-[#F59E0B]"
+              icon={<Grid className="w-4.5 h-4.5 text-white" />}
+              title="Collage Maker"
+              subtitle="Combine images into one design"
+              onReset={() => { setImages([]); setOverlays([]); history.reset([]) }}
+              className="w-full"
+            />
           </div>
-
-          {/* Tab switcher */}
-          <div className="flex gap-1 bg-(--card-bg) rounded-xl p-1">
-            {SIDE_TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setSideTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                  sideTab === tab.id
-                    ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]'
-                    : 'text-(--text-muted) hover:text-(--text-secondary)'
-                }`}
-              >
-                {tab.icon} {tab.label}
-              </button>
-            ))}
-          </div>
+          <SidebarTabStrip
+            tabs={SIDE_TABS.map(t => ({ id: t.id, label: t.label, icon: t.icon }))}
+            active={sideTab}
+            onChange={(id) => setSideTab(id as typeof sideTab)}
+            accentColor="#FF6B4A"
+          />
         </div>
 
         <div className="px-4 lg:px-5 pb-5 space-y-5">
@@ -630,12 +622,12 @@ export default function CollagePage() {
             title="Export"
             disabled={images.length === 0}
             onClick={() => images.length > 0 && setShowExport(!showExport)} 
-            className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${images.length === 0 ? 'opacity-40 cursor-not-allowed bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-muted)]' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] cursor-pointer'}`}
+            className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${images.length === 0 ? 'opacity-40 cursor-not-allowed bg-(--panel-bg) border-(--overlay-border) text-(--text-muted)' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-(--panel-bg) border-(--overlay-border) text-(--text-secondary) hover:bg-(--card-bg-hover) cursor-pointer'}`}
           >
             <Download className="w-4 h-4" /> Export
           </button>
           {showExport && images.length > 0 && (
-            <div className="bg-[var(--panel-bg)] p-3 rounded-2xl shadow-xl border border-[var(--overlay-border)] w-48 animate-in fade-in slide-in-from-top-2">
+            <div className="bg-(--panel-bg) p-3 rounded-2xl shadow-xl border border-(--overlay-border) w-48 animate-in fade-in slide-in-from-top-2">
               <ExportFormatPanel
                 format={exportFormat}
                 onFormatChange={setExportFormat}
@@ -795,7 +787,7 @@ function CollageMobileSheet({ children }: { children: React.ReactNode }) {
       style={{ height: expanded ? '55vh' : '110px', transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)' }}
     >
       <div className="shrink-0 flex items-center justify-center py-2.5 cursor-grab active:cursor-grabbing touch-manipulation" onPointerDown={onDragStart} onClick={() => setExpanded(v => !v)}>
-        <div className="w-10 h-1 rounded-full bg-[var(--text-muted)]/30" />
+        <div className="w-10 h-1 rounded-full bg-(--text-muted)/30" />
       </div>
       <div className={`flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'overflow-hidden'}`}>
         {children}

@@ -1,6 +1,5 @@
 import React from 'react'
 import { Settings, Save } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 interface ExportTabProps {
   isLoading: boolean
@@ -9,17 +8,23 @@ interface ExportTabProps {
 
 export default function ExportTab({ isLoading, onExport }: ExportTabProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Settings</label>
-        <div className="text-xs text-[var(--text-secondary)] space-y-2 bg-[var(--card-bg)] p-3 rounded-md border border-[var(--overlay-border)]">
-           <div className="flex justify-between font-medium"><span>Output FPS</span><span className="tabular-nums">12</span></div>
-           <div className="flex justify-between font-medium"><span>Max Size</span><span className="tabular-nums">512px</span></div>
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">Export Settings</label>
+        <div className="bg-(--card-bg) border border-(--overlay-border) rounded-xl p-3.5 space-y-2 text-xs text-(--text-secondary)">
+          <div className="flex justify-between">
+            <span className="font-medium text-(--text-muted)">Output FPS</span>
+            <span className="font-semibold text-(--text-primary) tabular-nums">12</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="font-medium text-(--text-muted)">Max Size</span>
+            <span className="font-semibold text-(--text-primary) tabular-nums">512px</span>
+          </div>
         </div>
       </div>
-      <Button 
-        className="w-full gap-2 bg-[#FF6B4A] hover:bg-[#FF6B4A]/90 text-white font-medium py-6 transition" 
-        size="lg"
+
+      <button
+        className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer bg-linear-to-r from-[#10B981] to-[#3B82F6] hover:opacity-90 shadow-lg shadow-[#10B981]/20 disabled:opacity-50 disabled:cursor-not-allowed"
         disabled={isLoading}
         onClick={onExport}
       >
@@ -29,7 +34,7 @@ export default function ExportTab({ isLoading, onExport }: ExportTabProps) {
           <Save className="w-5 h-5" />
         )}
         {isLoading ? 'Processing...' : 'Generate GIF'}
-      </Button>
+      </button>
     </div>
   )
 }

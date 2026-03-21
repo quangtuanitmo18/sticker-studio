@@ -1,15 +1,20 @@
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { Upload, Video, Image as ImageIcon, Sparkles, Scissors, Type, Smile, Frame, Settings, Save, Trash2, X } from 'lucide-react'
-import { loadVideo, VideoMetadata, TrimRange, extractFramesForGif, TextOverlay, StickerOverlay, captureFrameAsDataUrl, TEXT_ANIMATION_PRESETS } from '@/lib/video-processor'
+import { Download, Video, Sparkles, Trash2, Plus, Minus, Undo2, Redo2 } from 'lucide-react'
+import { captureFrameAsDataUrl } from '@/lib/video-processor'
+import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
+import { ExportFormatPanel } from '@/components/shared/ExportFormatPanel'
+import { SidebarHeader } from '@/components/shared/SidebarHeader'
+import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { Slider } from '@/components/ui/slider'
+import { useHistory } from '@/hooks/use-history'
+import type { TextOverlay, StickerOverlay } from '@/lib/video-processor'
 import VideoPreview from './VideoPreview'
 import TextTab from './components/TextTab'
 import StickersTab from './components/StickersTab'
-import ExportTab from './components/ExportTab'
 import { useGifMaker } from './hooks/useGifMaker'
 import EmptyState from './components/EmptyState'
 
@@ -23,13 +28,39 @@ export default function GifMakerClient() {
     draggingTextId, setDraggingTextId, handleExport, resetAll
   } = useGifMaker()
 
-  const [activeTab, setActiveTab] = useState<'trim' | 'text' | 'stickers' | 'export'>('trim')
+  const [activeTab, setActiveTab] = useState<'trim' | 'text' | 'stickers'>('trim')
+  const [showExport, setShowExport] = useState(false)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('png' as any)
+  const [zoom, setZoom] = useState(1)
+
+  // Overlay history for undo/redo
+  type OverlaySnapshot = { text: TextOverlay[]; stickers: StickerOverlay[] }
+  const history = useHistory<OverlaySnapshot>({ text: [], stickers: [] })
   
   const containerRef = useRef<HTMLDivElement>(null)
-  
-  // Use state instead of ref for videoEl so React re-renders when the node attaches
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
   const timeDisplayRef = useRef<HTMLSpanElement>(null)
+
+  // Helpers to push history before mutations
+  const handleSetTextOverlays = (updater: React.SetStateAction<TextOverlay[]>) => {
+    const next = typeof updater === 'function' ? updater(textOverlays) : updater
+    history.set({ text: textOverlays, stickers: stickerOverlays })
+    setTextOverlays(next)
+  }
+
+  const handleSetStickerOverlays = (updater: React.SetStateAction<StickerOverlay[]>) => {
+    const next = typeof updater === 'function' ? updater(stickerOverlays) : updater
+    history.set({ text: textOverlays, stickers: stickerOverlays })
+    setStickerOverlays(next)
+  }
+
+  const handleUndo = () => {
+    history.undo()
+  }
+
+  const handleRedo = () => {
+    history.redo()
+  }
 
   useEffect(() => {
     if (videoEl) {
@@ -67,38 +98,36 @@ export default function GifMakerClient() {
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
       {/* Sidebar Tool panel */}
-      <aside className="w-80 border-r border-[var(--overlay-border)] bg-[var(--card-bg)] flex flex-col z-10">
+      <aside className="w-80 border-r border-(--overlay-border) bg-(--panel-bg) flex flex-col z-10">
         {/* Header */}
-        <div className="p-4 border-b border-[var(--overlay-border)] flex items-center justify-between">
-          <h2 className="font-semibold text-[var(--text-primary)]">Settings</h2>
-          <Button variant="ghost" size="sm" onClick={resetAll} className="h-8 text-[var(--text-muted)] hover:text-red-400 gap-1.5 focus:outline-none">
-            <Trash2 className="w-4 h-4" />
-            Clear
-          </Button>
+        <div className="p-4 pb-3 border-b border-(--overlay-border)">
+          <SidebarHeader
+            gradient="from-[#10B981] to-[#3B82F6]"
+            icon={<Video className="w-4.5 h-4.5 text-white" />}
+            title="GIF Maker"
+            subtitle="Convert video to animated GIF"
+            onReset={resetAll}
+            className="mb-3"
+          />
+          <SidebarTabStrip
+            tabs={[
+              { id: 'trim', label: 'Trim' },
+              { id: 'text', label: 'Text' },
+              { id: 'stickers', label: 'Stickers' },
+            ]}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as typeof activeTab)}
+            accentColor="#10B981"
+          />
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-[var(--overlay-border)]">
-          {(['trim', 'text', 'stickers', 'export'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors capitalize ${activeTab === tab ? 'border-[#FF6B4A] text-[#FF6B4A]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {activeTab === 'trim' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
+              {/* AI Highlight */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">AI Highlight</label>
-                <p className="text-[10px] text-[var(--text-muted)] mb-3">
-                  Let AI find the best 3-5 seconds of your video to turn into a GIF.
-                </p>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">AI Highlight</label>
+                <p className="text-xs text-(--text-muted)">Let AI find the best 3–5 seconds to turn into a GIF.</p>
                 <Button
                   variant="secondary"
                   className="w-full gap-2"
@@ -141,65 +170,59 @@ export default function GifMakerClient() {
                 </Button>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Manual Trim</label>
-                  <p className="text-[10px] text-[var(--text-muted)] mb-3">
-                    Adjust the start and end time of your GIF.
-                  </p>
-                  <div className="flex flex-col gap-5 bg-[var(--card-bg)] p-4 rounded-md border border-[var(--overlay-border)]">
-                    <Slider
-                      label="Start"
-                      min={0}
-                      max={metadata.duration}
-                      step={0.1}
-                      value={Number(trim.start.toFixed(1))}
-                      onChange={(val) => setTrim(prev => ({ ...prev, start: Math.min(val, prev.end - 0.5) }))}
-                      unit="s"
-                    />
-                    <Slider
-                      label="End"
-                      min={0}
-                      max={metadata.duration}
-                      step={0.1}
-                      value={Number(trim.end.toFixed(1))}
-                      onChange={(val) => setTrim(prev => ({ ...prev, end: Math.max(val, prev.start + 0.5) }))}
-                      unit="s"
-                    />
-                  </div>
-                </div>
+              {/* Manual Trim */}
+              <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-4">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">Manual Trim</label>
+                <Slider
+                  label="Start"
+                  min={0}
+                  max={metadata.duration}
+                  step={0.1}
+                  value={Number(trim.start.toFixed(1))}
+                  onChange={(val) => setTrim(prev => ({ ...prev, start: Math.min(val, prev.end - 0.5) }))}
+                  unit="s"
+                />
+                <Slider
+                  label="End"
+                  min={0}
+                  max={metadata.duration}
+                  step={0.1}
+                  value={Number(trim.end.toFixed(1))}
+                  onChange={(val) => setTrim(prev => ({ ...prev, end: Math.max(val, prev.start + 0.5) }))}
+                  unit="s"
+                />
+              </div>
 
-                <div className="space-y-2 pt-4 border-t border-[var(--overlay-border)]">
-                  <Slider
-                    label="Playback Speed"
-                    min={0.5}
-                    max={3.0}
-                    step={0.1}
-                    value={speed}
-                    onChange={(val) => setSpeed(val)}
-                    unit="x"
-                  />
-                  <div className="flex justify-between text-[10px] text-[var(--text-muted)] px-1">
-                    <span>0.5x</span>
-                    <span>1x</span>
-                    <span>3x</span>
-                  </div>
+              {/* Speed */}
+              <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-2">
+                <Slider
+                  label="Playback Speed"
+                  min={0.5}
+                  max={3.0}
+                  step={0.1}
+                  value={speed}
+                  onChange={(val) => setSpeed(val)}
+                  unit="x"
+                />
+                <div className="flex justify-between text-[10px] text-(--text-muted) px-1">
+                  <span>0.5x</span><span>1x</span><span>3x</span>
                 </div>
+              </div>
 
-                <div className="space-y-2 pt-4 border-t border-[var(--overlay-border)]">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Dimensions</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-[var(--card-bg)] border border-[var(--overlay-border)] rounded-md p-2 flex flex-col items-center">
-                      <span className="text-[10px] text-[var(--text-muted)] uppercase">Width</span>
-                      <span className="text-sm font-medium">{metadata.width}px</span>
-                    </div>
-                    <div className="bg-[var(--card-bg)] border border-[var(--overlay-border)] rounded-md p-2 flex flex-col items-center">
-                      <span className="text-[10px] text-[var(--text-muted)] uppercase">Height</span>
-                      <span className="text-sm font-medium">{metadata.height}px</span>
-                    </div>
+              {/* Dimensions */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">Dimensions</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-(--card-bg) border border-(--overlay-border) rounded-xl p-2 flex flex-col items-center">
+                    <span className="text-[10px] text-(--text-muted) uppercase">Width</span>
+                    <span className="text-sm font-semibold text-(--text-primary)">{metadata.width}px</span>
+                  </div>
+                  <div className="bg-(--card-bg) border border-(--overlay-border) rounded-xl p-2 flex flex-col items-center">
+                    <span className="text-[10px] text-(--text-muted) uppercase">Height</span>
+                    <span className="text-sm font-semibold text-(--text-primary)">{metadata.height}px</span>
                   </div>
                 </div>
-                <div className="text-xs text-center text-[var(--text-muted)] mt-2">
+                <div className="text-xs text-center text-(--text-muted)">
                   Duration: {((trim.end - trim.start) / speed).toFixed(1)}s
                 </div>
               </div>
@@ -207,25 +230,71 @@ export default function GifMakerClient() {
           )}
 
           {activeTab === 'text' && (
-            <TextTab textOverlays={textOverlays} setTextOverlays={setTextOverlays} />
+            <TextTab textOverlays={textOverlays} setTextOverlays={handleSetTextOverlays} />
           )}
 
           {activeTab === 'stickers' && (
-            <StickersTab stickerOverlays={stickerOverlays} setStickerOverlays={setStickerOverlays} />
-          )}
-
-          {activeTab === 'export' && (
-            <ExportTab isLoading={isLoading} onExport={() => handleExport(videoEl)} />
+            <StickersTab stickerOverlays={stickerOverlays} setStickerOverlays={handleSetStickerOverlays} />
           )}
         </div>
       </aside>
 
       {/* Main Preview Area */}
-      <main className="flex-1 flex flex-col bg-[var(--background)] relative min-w-0">
-        <div className="flex-1 p-6 flex flex-col items-center justify-center relative min-h-0 bg-[var(--background)]">
+      <main className="flex-1 flex flex-col bg-(--background) relative min-w-0" onClick={() => setShowExport(false)}>
+        <div className="flex-1 p-6 flex flex-col items-center justify-center relative min-h-0 bg-(--background)">
 
-          {/* Main Video Element wrapped in a container to maintain aspect ratio */}
-          <div className="relative max-w-full max-h-full rounded-lg overflow-hidden border border-[var(--overlay-border)] shadow-xl bg-black">
+          {/* ─── Floating Export Controls (top-right) ─── */}
+          <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
+            <button
+              title="Export GIF"
+              disabled={!videoEl || isLoading}
+              onClick={() => setShowExport(v => !v)}
+              className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${!videoEl || isLoading ? 'opacity-40 cursor-not-allowed bg-(--panel-bg) border-(--overlay-border) text-(--text-muted)' : showExport ? 'bg-[#10B981] border-[#10B981] text-white cursor-pointer' : 'bg-(--panel-bg) border-(--overlay-border) text-(--text-secondary) hover:bg-(--card-bg-hover) cursor-pointer'}`}
+            >
+              <Download className="w-4 h-4" /> Export GIF
+            </button>
+            {showExport && videoEl && (
+              <div className="bg-(--panel-bg) p-3 rounded-2xl shadow-xl border border-(--overlay-border) w-52 animate-in fade-in slide-in-from-top-2">
+                <button
+                  className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer bg-linear-to-r from-[#10B981] to-[#3B82F6] hover:opacity-90 shadow-lg shadow-[#10B981]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading}
+                  onClick={() => { setShowExport(false); handleExport(videoEl) }}
+                >
+                  {isLoading ? <Download className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {isLoading ? 'Processing...' : 'Generate & Save GIF'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ─── Floating Canvas Controls (bottom-right) ─── */}
+          <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
+            {/* Undo / Redo */}
+            <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
+              <button title="Undo" onClick={handleUndo} disabled={!history.canUndo} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                <Undo2 className="w-4 h-4" />
+              </button>
+              <button title="Redo" onClick={handleRedo} disabled={!history.canRedo} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                <Redo2 className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Zoom */}
+            <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
+              <button onClick={() => setZoom(z => Math.min(z + 0.1, 3))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer">
+                <Plus className="w-4 h-4" />
+              </button>
+              <div className="text-[10px] font-bold text-center text-(--text-muted) w-8 tabular-nums">{Math.round(zoom * 100)}%</div>
+              <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer">
+                <Minus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Main Video Element */}
+          <div
+            className="relative max-w-full max-h-full rounded-xl overflow-hidden border border-(--overlay-border) shadow-xl bg-black"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 0.15s ease' }}
+          >
             <video
               ref={setVideoEl}
               src={videoUrl}
@@ -343,10 +412,10 @@ export default function GifMakerClient() {
         </div>
 
         {/* Timeline Footer */}
-        <div className="h-32 border-t border-[var(--overlay-border)] bg-[var(--card-bg)] p-4 flex-shrink-0">
+        <div className="h-32 border-t border-(--overlay-border) bg-(--card-bg) p-4 shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Timeline</span>
-            <span ref={timeDisplayRef} className="text-xs tabular-nums text-[var(--text-secondary)]">
+            <span className="text-xs font-semibold uppercase tracking-wider text-(--text-muted)">Timeline</span>
+            <span ref={timeDisplayRef} className="text-xs tabular-nums text-(--text-secondary)">
               {metadata ? `${(currentTime / speed).toFixed(1)}s / ${(metadata.duration / speed).toFixed(1)}s` : '0.0s / 0.0s'}
             </span>
           </div>

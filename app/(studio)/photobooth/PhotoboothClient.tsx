@@ -4,6 +4,8 @@ import { AssetPanel } from '@/components/shared/AssetPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
 import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
 import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
+import { SidebarHeader } from '@/components/shared/SidebarHeader'
+import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
 import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
@@ -17,6 +19,7 @@ import {
   FlipHorizontal2,
   Frame,
   Grid, Layers,
+  Minus,
   Plus,
   Redo2,
   RefreshCw, RotateCcw, Settings, Sparkles,
@@ -313,7 +316,7 @@ export default function PhotoboothPage() {
     setOverlays(prev => prev.map(o => o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o))
   }
 
-  // Track preview container dimensions for Konva stage sizing
+  // Track preview container dimensions and handle non-passive wheel events
   useEffect(() => {
     const el = previewRef.current
     if (!el) return
@@ -323,16 +326,30 @@ export default function PhotoboothPage() {
       }
     })
     ro.observe(el)
-    return () => ro.disconnect()
+
+    // Prevent passive scroll on slot zones (React's onWheel is passive by default)
+    const handleWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest('[data-slot-zone="true"]')) {
+        e.preventDefault()
+      }
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('wheel', handleWheel)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Slot photo drag (custom frame) ────────────────────────
   const [draggingSlot, setDraggingSlot] = useState<number | null>(null)
+  const [activeSlot, setActiveSlot] = useState<number | null>(null)
   const slotDragStart = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
   const getSlotOffset = (i: number) => slotOffsets[i] || { ox: 0, oy: 0, scale: 1 }
   const onSlotDown = (e: React.PointerEvent, slotIdx: number) => {
     e.stopPropagation(); e.preventDefault()
     setDraggingSlot(slotIdx)
+    setActiveSlot(slotIdx)
     const off = getSlotOffset(slotIdx)
     slotDragStart.current = { x: e.clientX, y: e.clientY, ox: off.ox, oy: off.oy }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -351,11 +368,11 @@ export default function PhotoboothPage() {
     })
   }
   const onSlotUp = () => { setDraggingSlot(null); slotDragStart.current = null }
-  const onSlotWheel = (e: React.WheelEvent, slotIdx: number) => {
-    e.stopPropagation()
-    const delta = e.deltaY > 0 ? -0.05 : 0.05
+  
+  const adjustZoom = (slotIdx: number, delta: number) => {
     setSlotOffsets(prev => {
       const cur = prev[slotIdx] || { ox: 0, oy: 0, scale: 1 }
+      // Snap slightly closer to 100% and limit min/max
       return { ...prev, [slotIdx]: { ...cur, scale: Math.max(0.5, Math.min(3, cur.scale + delta)) } }
     })
   }
@@ -459,22 +476,22 @@ export default function PhotoboothPage() {
     <>
       <div className="p-3 lg:p-5 pb-2 lg:pb-3">
         <div className="hidden lg:flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-[#EC4899] to-[#8B5CF6] flex items-center justify-center">
-            <Camera className="w-4.5 h-4.5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-(--text-primary)">Photobooth</h2>
-            <p className="text-xs text-(--text-muted)">Premium photo strips</p>
-          </div>
+          <SidebarHeader
+            gradient="from-[#EC4899] to-[#8B5CF6]"
+            icon={<Camera className="w-4.5 h-4.5 text-white" />}
+            title="Photobooth"
+            subtitle="Premium photo strips"
+            onReset={() => { setCapturedPhotos([]); setOverlays([]); stopCamera() }}
+            className="w-full"
+          />
         </div>
-        <div className="flex gap-0.5 bg-(--card-bg) rounded-xl p-1 overflow-x-auto">
-          {SIDE.map(t => (
-            <button key={t.id} onClick={() => setSideTab(t.id)}
-              className={`flex-1 flex items-center justify-center gap-0.5 py-2 rounded-lg text-[10px] font-semibold transition-all cursor-pointer px-1 ${sideTab === t.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]' : 'text-(--text-muted) hover:text-(--text-secondary)'}`}>
-              {t.icon}<span className="hidden sm:inline">{t.label}</span>
-            </button>
-          ))}
-        </div>
+        <SidebarTabStrip
+          tabs={SIDE.map(t => ({ id: t.id, label: t.label, icon: t.icon }))}
+          active={sideTab}
+          onChange={(id) => setSideTab(id as typeof sideTab)}
+          accentColor="#FF6B4A"
+          className="overflow-x-auto"
+        />
       </div>
 
       <div className="px-4 lg:px-5 pb-5 space-y-4">
@@ -655,12 +672,12 @@ export default function PhotoboothPage() {
               title="Export"
               disabled={capturedPhotos.length === 0}
               onClick={() => capturedPhotos.length > 0 && setShowExport(!showExport)} 
-              className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${capturedPhotos.length === 0 ? 'opacity-40 cursor-not-allowed bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-muted)]' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-[var(--panel-bg)] border-[var(--overlay-border)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] cursor-pointer'}`}
+              className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${capturedPhotos.length === 0 ? 'opacity-40 cursor-not-allowed bg-(--panel-bg) border-(--overlay-border) text-(--text-muted)' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-(--panel-bg) border-(--overlay-border) text-(--text-secondary) hover:bg-(--card-bg-hover) cursor-pointer'}`}
             >
               <Download className="w-4 h-4" /> Export
             </button>
             {showExport && capturedPhotos.length > 0 && (
-              <div className="bg-[var(--panel-bg)] p-3 rounded-2xl shadow-xl border border-[var(--overlay-border)] w-48 animate-in fade-in slide-in-from-top-2">
+              <div className="bg-(--panel-bg) p-3 rounded-2xl shadow-xl border border-(--overlay-border) w-48 animate-in fade-in slide-in-from-top-2">
                 <ExportFormatPanel
                   format={exportFormat}
                   onFormatChange={setExportFormat}
@@ -729,17 +746,18 @@ export default function PhotoboothPage() {
                   maxWidth: activeCustomFrame ? '360px' : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid' ? '300px' : '240px',
                   ...(activeCustomFrame ? {} : { aspectRatio: stripTemplate.id === 'polaroid' ? '5/6' : stripTemplate.id === 'grid2x2' ? '1/1' : '3/8' })
                 }}
+                onPointerDown={() => setActiveSlot(null)}
                 onPointerMove={e => { onSlotMove(e) }}
                 onPointerUp={() => { onSlotUp() }}
               >
                 {activeCustomFrame ? (
-                  <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} onSlotDown={onSlotDown} onSlotWheel={onSlotWheel} />
+                  <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} />
                 ) : (
                   <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} />
                 )}
-                {/* Konva overlay layer for text/assets — stopPropagation prevents parent deselect */}
+                {/* Konva overlay layer for text/assets — only block parent deselect via onClick */}
                 {previewDims.w > 0 && previewDims.h > 0 && (
-                  <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                  <div onClick={e => e.stopPropagation()}>
                     <OverlayCanvas
                       ref={overlayRef}
                       elements={overlays}
@@ -751,6 +769,48 @@ export default function PhotoboothPage() {
                     />
                   </div>
                 )}
+                {/* Slot drag zones — rendered above the Konva overlay so frame photos can be repositioned */}
+                {activeCustomFrame && activeCustomFrame.slots.map((slot, i) => (
+                  i < capturedPhotos.length && (
+                    <div key={`slot-drag-${i}`}
+                      data-slot-zone="true"
+                      className={`absolute cursor-grab active:cursor-grabbing group ${activeSlot === i ? 'ring-2 ring-[#FF6B4A]/50 ring-offset-2 ring-offset-black/20' : ''}`}
+                      style={{
+                        left: `${(slot.x / activeCustomFrame.width) * 100}%`,
+                        top: `${(slot.y / activeCustomFrame.height) * 100}%`,
+                        width: `${(slot.w / activeCustomFrame.width) * 100}%`,
+                        height: `${(slot.h / activeCustomFrame.height) * 100}%`,
+                        borderRadius: slot.radius > 0 ? `${(slot.radius / Math.min(slot.w, slot.h)) * 50}%` : undefined,
+                        zIndex: activeSlot === i ? 30 : 20,
+                      }}
+                      title={`Drag to reposition photo ${i + 1}`}
+                      onPointerDown={e => onSlotDown(e, i)}
+                    >
+                      {/* Floating Zoom Controls for Selected Photo */}
+                      {activeSlot === i && (
+                        <div 
+                          className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md rounded-full px-2 py-1.5 flex items-center justify-center gap-1.5 shadow-xl min-w-[80px]"
+                          onPointerDown={e => e.stopPropagation()} // Prevent drag start when clicking zoom buttons
+                          style={{ cursor: 'default' }}
+                        >
+                          <button 
+                            className="p-1 text-white hover:text-[#FF6B4A] active:scale-90 transition-transform bg-white/10 rounded-full"
+                            onClick={() => adjustZoom(i, -0.05)}
+                          ><Minus className="w-3.5 h-3.5" /></button>
+                          
+                          <span className="text-[10px] sm:text-[11px] font-bold text-white w-8 text-center tabular-nums pointer-events-none">
+                            {Math.round(getSlotOffset(i).scale * 100)}%
+                          </span>
+                          
+                          <button 
+                            className="p-1 text-white hover:text-[#FF6B4A] active:scale-90 transition-transform bg-white/10 rounded-full"
+                            onClick={() => adjustZoom(i, 0.05)}
+                          ><Plus className="w-3.5 h-3.5" /></button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                ))}
               </div>
             )}
             
@@ -879,11 +939,9 @@ function StripCanvas({ template, photos, bg }: { template: StripTemplate; photos
   return <canvas ref={ref} className="w-full h-full" />
 }
 
-function FramePreviewCanvas({ frame, photos, slotOffsets, onSlotDown, onSlotWheel }: {
+function FramePreviewCanvas({ frame, photos, slotOffsets }: {
   frame: FrameTemplate; photos: HTMLCanvasElement[]
   slotOffsets: Record<number, { ox: number; oy: number; scale: number }>
-  onSlotDown: (e: React.PointerEvent, idx: number) => void
-  onSlotWheel: (e: React.WheelEvent, idx: number) => void
 }) {
   const photosCanvasRef = useRef<HTMLCanvasElement>(null)
   const frameCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -968,24 +1026,6 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onSlotDown, onSlotWhee
       {frame.frameDataUrl && (
         <canvas ref={frameCanvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
       )}
-      {/* Invisible slot drag zones */}
-      {frame.slots.map((slot, i) => (
-        i < photos.length && (
-          <div key={i}
-            className="absolute cursor-grab active:cursor-grabbing"
-            style={{
-              left: `${(slot.x / frame.width) * 100}%`,
-              top: `${(slot.y / frame.height) * 100}%`,
-              width: `${(slot.w / frame.width) * 100}%`,
-              height: `${(slot.h / frame.height) * 100}%`,
-              borderRadius: slot.radius > 0 ? `${(slot.radius / Math.min(slot.w, slot.h)) * 50}%` : undefined,
-            }}
-            title={`Drag to reposition photo ${i + 1}, scroll to zoom`}
-            onPointerDown={e => onSlotDown(e, i)}
-            onWheel={e => onSlotWheel(e, i)}
-          />
-        )
-      ))}
     </div>
   )
 }

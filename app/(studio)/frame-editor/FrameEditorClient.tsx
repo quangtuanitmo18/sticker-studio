@@ -1,14 +1,16 @@
 'use client'
 
+import { SidebarHeader } from '@/components/shared/SidebarHeader'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { downloadUrl } from '@/lib/download'
+import { detectSlots, hasTransparentRegions } from '@/lib/slot-detector'
 import {
-    Cloud, Copy, Download, Eye, GripVertical, ImagePlus,
-    Layers, Loader2, MousePointer2,
+    Cloud, Copy, Download, Eye, Grid, GripVertical, HelpCircle, ImagePlus, Info,
+    Layers, Loader2, Magnet, MousePointer2,
     Plus,
     Redo2,
-    RotateCcw, Save, Square, Trash2, Undo2,
+    RotateCcw, Save, Scan, Square, Trash2, Undo2,
     X
 } from 'lucide-react'
 import Link from 'next/link'
@@ -94,6 +96,16 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
   const [showPreview, setShowPreview] = useState(false)
   const [sampleImgs, setSampleImgs] = useState<HTMLImageElement[]>([])
 
+  // Guide Modal
+  const [showGuide, setShowGuide] = useState(false)
+
+  useEffect(() => {
+    if (!localStorage.getItem('sticker-studio-frame-guide-seen')) {
+      setShowGuide(true)
+      localStorage.setItem('sticker-studio-frame-guide-seen', 'true')
+    }
+  }, [])
+
   // Save success
   const [justSaved, setJustSaved] = useState(false)
   const [isSavingCloud, setIsSavingCloud] = useState(false)
@@ -106,6 +118,17 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
   const [baseScale, setBaseScale] = useState(1)
   const [zoom, setZoom] = useState(1)
   const scale = baseScale * zoom
+
+  // ─── Snap-to-grid + Smart guides ──────────────────────────
+  const [snapEnabled, setSnapEnabled] = useState(true)
+  const [gridSize, setGridSize] = useState(10)
+  const [showGrid, setShowGrid] = useState(true)
+  const [guides, setGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] })
+  const GUIDE_THRESHOLD = 6 // snap within 6 px
+
+  // Auto-detect
+  const [isDetecting, setIsDetecting] = useState(false)
+  const [hasTransparency, setHasTransparency] = useState(false)
 
   useEffect(() => { setSavedTemplates(loadSavedTemplates()) }, [])
 
@@ -139,6 +162,87 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
     return () => ro.disconnect()
   }, [frameW, frameH])
 
+  // Check transparency when frame image changes
+  useEffect(() => {
+    if (frameImg) {
+      setHasTransparency(hasTransparentRegions(frameImg))
+    } else {
+      setHasTransparency(false)
+    }
+  }, [frameImg])
+
+  // ─── Snap helpers ─────────────────────────────────────────
+  const snapToGrid = useCallback((v: number) => {
+    if (!snapEnabled) return v
+    return Math.round(v / gridSize) * gridSize
+  }, [snapEnabled, gridSize])
+
+  const computeGuides = useCallback((movingSlot: FrameSlot) => {
+    if (!snapEnabled) { setGuides({ vertical: [], horizontal: [] }); return }
+    const vGuides: number[] = []
+    const hGuides: number[] = []
+    const moveCx = movingSlot.x + movingSlot.w / 2
+    const moveCy = movingSlot.y + movingSlot.h / 2
+    const moveRight = movingSlot.x + movingSlot.w
+    const moveBottom = movingSlot.y + movingSlot.h
+
+    // Frame center guides
+    const fcx = frameW / 2, fcy = frameH / 2
+    if (Math.abs(moveCx - fcx) < GUIDE_THRESHOLD) vGuides.push(fcx)
+    if (Math.abs(moveCy - fcy) < GUIDE_THRESHOLD) hGuides.push(fcy)
+    // Frame edges
+    if (Math.abs(movingSlot.x) < GUIDE_THRESHOLD) vGuides.push(0)
+    if (Math.abs(moveRight - frameW) < GUIDE_THRESHOLD) vGuides.push(frameW)
+    if (Math.abs(movingSlot.y) < GUIDE_THRESHOLD) hGuides.push(0)
+    if (Math.abs(moveBottom - frameH) < GUIDE_THRESHOLD) hGuides.push(frameH)
+
+    // Other slots alignment
+    for (const s of slots) {
+      if (s.id === movingSlot.id) continue
+      const cx = s.x + s.w / 2, cy = s.y + s.h / 2
+      const right = s.x + s.w, bottom = s.y + s.h
+      // Center alignment
+      if (Math.abs(moveCx - cx) < GUIDE_THRESHOLD) vGuides.push(cx)
+      if (Math.abs(moveCy - cy) < GUIDE_THRESHOLD) hGuides.push(cy)
+      // Edge alignment
+      if (Math.abs(movingSlot.x - s.x) < GUIDE_THRESHOLD) vGuides.push(s.x)
+      if (Math.abs(moveRight - right) < GUIDE_THRESHOLD) vGuides.push(right)
+      if (Math.abs(movingSlot.x - right) < GUIDE_THRESHOLD) vGuides.push(right)
+      if (Math.abs(moveRight - s.x) < GUIDE_THRESHOLD) vGuides.push(s.x)
+      if (Math.abs(movingSlot.y - s.y) < GUIDE_THRESHOLD) hGuides.push(s.y)
+      if (Math.abs(moveBottom - bottom) < GUIDE_THRESHOLD) hGuides.push(bottom)
+      if (Math.abs(movingSlot.y - bottom) < GUIDE_THRESHOLD) hGuides.push(bottom)
+      if (Math.abs(moveBottom - s.y) < GUIDE_THRESHOLD) hGuides.push(s.y)
+    }
+    setGuides({ vertical: [...new Set(vGuides)], horizontal: [...new Set(hGuides)] })
+  }, [snapEnabled, slots, frameW, frameH])
+
+  // ─── Auto-detect slots ────────────────────────────────────
+  const handleAutoDetect = useCallback(async () => {
+    if (!frameImg) return
+    setIsDetecting(true)
+    // Yield to UI
+    await new Promise(r => setTimeout(r, 50))
+    try {
+      const detected = detectSlots(frameImg)
+      if (detected.length === 0) {
+        toast('No transparent slots detected in this frame', 'error')
+        setIsDetecting(false)
+        return
+      }
+      const newSlots: FrameSlot[] = detected.map(d => ({
+        id: uid(), x: d.x, y: d.y, w: d.w, h: d.h, rotation: 0, radius: 8
+      }))
+      setSlots(newSlots)
+      setSelectedId(null)
+      toast(`⚡ Detected ${newSlots.length} slot${newSlots.length > 1 ? 's' : ''}! Review & adjust as needed`, 'success')
+    } catch (err) {
+      console.error('Slot detection failed:', err)
+      toast('Detection failed — try drawing slots manually', 'error')
+    }
+    setIsDetecting(false)
+  }, [frameImg, toast])
+
   // ─── Canvas rendering ──────────────────────────────────────
   const render = useCallback(() => {
     const canvas = canvasRef.current
@@ -153,11 +257,20 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
     ctx.fillRect(0, 0, frameW, frameH)
 
     // Grid
-    ctx.strokeStyle = '#e5e7eb'
-    ctx.lineWidth = 0.5
-    const gridSize = 50
-    for (let x = 0; x <= frameW; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, frameH); ctx.stroke() }
-    for (let y = 0; y <= frameH; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(frameW, y); ctx.stroke() }
+    if (showGrid) {
+      ctx.strokeStyle = snapEnabled ? 'rgba(59,130,246,0.08)' : '#e5e7eb'
+      ctx.lineWidth = 0.5
+      const displayGridSize = snapEnabled ? gridSize : 50
+      for (let x = 0; x <= frameW; x += displayGridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, frameH); ctx.stroke() }
+      for (let y = 0; y <= frameH; y += displayGridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(frameW, y); ctx.stroke() }
+      // Frame center crosshair
+      ctx.strokeStyle = 'rgba(59,130,246,0.15)'
+      ctx.lineWidth = 1
+      ctx.setLineDash([8, 4])
+      ctx.beginPath(); ctx.moveTo(frameW / 2, 0); ctx.lineTo(frameW / 2, frameH); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(0, frameH / 2); ctx.lineTo(frameW, frameH / 2); ctx.stroke()
+      ctx.setLineDash([])
+    }
 
     // Preview: draw sample photos in slots
     if (showPreview) {
@@ -249,9 +362,31 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
       ctx.setLineDash([5, 3])
       ctx.strokeRect(drawRect.x, drawRect.y, drawRect.w, drawRect.h)
       ctx.setLineDash([])
+      // Dimension label on draw rect
+      ctx.fillStyle = '#FF6B4A'
+      ctx.font = 'bold 11px Inter, system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(`${Math.round(drawRect.w)}×${Math.round(drawRect.h)}`, drawRect.x + drawRect.w / 2, drawRect.y + drawRect.h + 14)
       ctx.restore()
     }
-  }, [frameW, frameH, frameImg, slots, selectedId, scale, showPreview, sampleImgs, drawRect])
+
+    // ─── Smart guide lines ────────────────────────────────
+    if (guides.vertical.length > 0 || guides.horizontal.length > 0) {
+      ctx.save()
+      ctx.strokeStyle = '#3B82F6'
+      ctx.lineWidth = 1
+      ctx.setLineDash([4, 3])
+      ctx.globalAlpha = 0.7
+      for (const gx of guides.vertical) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, frameH); ctx.stroke()
+      }
+      for (const gy of guides.horizontal) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(frameW, gy); ctx.stroke()
+      }
+      ctx.setLineDash([])
+      ctx.restore()
+    }
+  }, [frameW, frameH, frameImg, slots, selectedId, scale, showPreview, sampleImgs, drawRect, showGrid, snapEnabled, gridSize, guides])
 
   useEffect(() => { render() }, [render])
 
@@ -307,11 +442,11 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
     const { x, y } = canvasToFrame(e)
 
     if (tool === 'draw' && isDrawing && drawStart.current) {
-      const sx = Math.min(drawStart.current.x, x)
-      const sy = Math.min(drawStart.current.y, y)
-      const sw = Math.abs(x - drawStart.current.x)
-      const sh = Math.abs(y - drawStart.current.y)
-      setDrawRect({ x: sx, y: sy, w: sw, h: sh })
+      const rawSx = Math.min(drawStart.current.x, x)
+      const rawSy = Math.min(drawStart.current.y, y)
+      const rawSw = Math.abs(x - drawStart.current.x)
+      const rawSh = Math.abs(y - drawStart.current.y)
+      setDrawRect({ x: snapToGrid(rawSx), y: snapToGrid(rawSy), w: snapToGrid(rawSw), h: snapToGrid(rawSh) })
       return
     }
 
@@ -321,14 +456,22 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
       setSlots(prev => prev.map(s => {
         if (s.id !== selectedId) return s
         if (activeHandle === 'move') {
-          return { ...s, x: Math.max(0, Math.min(frameW - s.w, slot.x + dx)), y: Math.max(0, Math.min(frameH - s.h, slot.y + dy)) }
+          const newX = snapToGrid(Math.max(0, Math.min(frameW - s.w, slot.x + dx)))
+          const newY = snapToGrid(Math.max(0, Math.min(frameH - s.h, slot.y + dy)))
+          const movedSlot = { ...s, x: newX, y: newY }
+          computeGuides(movedSlot)
+          return movedSlot
         }
         let nx = slot.x, ny = slot.y, nw = slot.w, nh = slot.h
         if (activeHandle === 'se') { nw = Math.max(30, slot.w + dx); nh = Math.max(30, slot.h + dy) }
         if (activeHandle === 'sw') { nx = slot.x + dx; nw = Math.max(30, slot.w - dx); nh = Math.max(30, slot.h + dy) }
         if (activeHandle === 'ne') { ny = slot.y + dy; nw = Math.max(30, slot.w + dx); nh = Math.max(30, slot.h - dy) }
         if (activeHandle === 'nw') { nx = slot.x + dx; ny = slot.y + dy; nw = Math.max(30, slot.w - dx); nh = Math.max(30, slot.h - dy) }
-        return { ...s, x: Math.max(0, nx), y: Math.max(0, ny), w: Math.min(nw, frameW), h: Math.min(nh, frameH) }
+        nx = snapToGrid(Math.max(0, nx)); ny = snapToGrid(Math.max(0, ny))
+        nw = snapToGrid(Math.min(nw, frameW)); nh = snapToGrid(Math.min(nh, frameH))
+        const resizedSlot = { ...s, x: nx, y: ny, w: nw, h: nh }
+        computeGuides(resizedSlot)
+        return resizedSlot
       }))
     }
   }
@@ -337,8 +480,8 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
     if (tool === 'draw' && isDrawing && drawRect) {
       if (drawRect.w > 20 && drawRect.h > 20) {
         const newSlot: FrameSlot = {
-          id: uid(), x: Math.round(drawRect.x), y: Math.round(drawRect.y),
-          w: Math.round(drawRect.w), h: Math.round(drawRect.h), rotation: 0, radius: 0
+          id: uid(), x: snapToGrid(Math.round(drawRect.x)), y: snapToGrid(Math.round(drawRect.y)),
+          w: snapToGrid(Math.round(drawRect.w)), h: snapToGrid(Math.round(drawRect.h)), rotation: 0, radius: 8
         }
         setSlots(prev => [...prev, newSlot])
         setSelectedId(newSlot.id)
@@ -352,6 +495,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
     setIsDragging(false)
     setActiveHandle(null)
     dragStart.current = null
+    setGuides({ vertical: [], horizontal: [] })
   }
 
   // ─── Frame upload ─────────────────────────────────────────
@@ -659,20 +803,27 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
       {/* ═══ LEFT SIDEBAR ═══ */}
       <div className="w-full lg:w-[320px] shrink-0 bg-[var(--panel-bg)] border-b lg:border-b-0 lg:border-r border-[var(--overlay-border)] overflow-y-auto p-4 lg:p-5 space-y-4">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center">
-            <Layers className="w-4.5 h-4.5 text-white" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-bold text-(--text-primary)">Frame Editor</h2>
-            <p className="text-xs text-(--text-muted)">Design photobooth templates</p>
-          </div>
-          {embedded && onClose && (
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-(--card-bg-hover) transition-all cursor-pointer">
-              <X className="w-5 h-5 text-(--text-muted)" />
-            </button>
-          )}
-        </div>
+        <SidebarHeader
+          gradient="from-[#3B82F6] to-[#8B5CF6]"
+          icon={<Layers className="w-4.5 h-4.5 text-white" />}
+          title="Frame Editor"
+          subtitle="Design photobooth templates"
+          rightSlot={
+            embedded && onClose ? (
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-(--card-bg-hover) transition-all cursor-pointer">
+                <X className="w-5 h-5 text-(--text-muted)" />
+              </button>
+            ) : (
+              <button
+                onClick={() => { setSlots([]); setFrameImg(null); setFrameDataUrl(''); setFrameName('My Frame') }}
+                title="Clear frame"
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-(--card-bg) hover:bg-red-500/10 hover:text-red-400 text-(--text-muted) transition-all cursor-pointer shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )
+          }
+        />
 
         {/* Frame name */}
         <div>
@@ -683,7 +834,12 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
 
         {/* Upload */}
         <div>
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5 block">Frame Image (PNG)</label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] block">Frame Image (PNG)</label>
+            <button onClick={() => setShowGuide(true)} className="text-[var(--text-muted)] hover:text-[#3B82F6] transition-colors cursor-pointer" title="Hướng dẫn chuẩn bị Frame">
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <label className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[var(--overlay-border)] hover:border-[#3B82F6]/40 cursor-pointer transition-all hover:bg-[var(--card-bg)]">
             <ImagePlus className="w-4 h-4 text-[var(--text-muted)]" />
             <span className="text-xs font-medium text-[var(--text-secondary)]">{frameImg ? 'Replace frame' : 'Upload PNG frame'}</span>
@@ -715,6 +871,40 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
               <Square className="w-3.5 h-3.5" /> Draw Slot
             </button>
           </div>
+        </div>
+
+        {/* Auto-detect */}
+        {frameImg && (
+          <div>
+            <button onClick={handleAutoDetect} disabled={isDetecting}
+              className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer bg-linear-to-r from-[#3B82F6] to-[#8B5CF6] text-white hover:opacity-90 disabled:opacity-50 shadow-lg shadow-[#3B82F6]/20">
+              {isDetecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scan className="w-4 h-4" />}
+              {isDetecting ? 'Analyzing frame...' : '⚡ Auto-detect Slots'}
+            </button>
+            <p className="text-[9px] text-(--text-muted) mt-1 text-center">Scans for transparent regions in frame PNG</p>
+          </div>
+        )}
+
+        {/* Snap & Grid */}
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5 block">Snap & Grid</label>
+          <div className="flex gap-1.5 mb-2">
+            <button onClick={() => setSnapEnabled(!snapEnabled)} className={`flex-1 py-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${snapEnabled ? 'bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]/20' : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)]'}`}>
+              <Magnet className="w-3 h-3" /> Snap {snapEnabled ? 'ON' : 'OFF'}
+            </button>
+            <button onClick={() => setShowGrid(!showGrid)} className={`flex-1 py-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${showGrid ? 'bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]/20' : 'bg-[var(--card-bg)] text-[var(--text-tertiary)] border border-[var(--overlay-border)]'}`}>
+              <Grid className="w-3 h-3" /> Grid {showGrid ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          {snapEnabled && (
+            <div className="flex gap-1">
+              {[5, 10, 25, 50].map(g => (
+                <button key={g} onClick={() => setGridSize(g)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${gridSize === g ? 'bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]/20' : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--overlay-border)]'}`}>
+                  {g}px
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Layout Presets */}
@@ -885,12 +1075,98 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
             />
             {/* Status bar */}
             <div className="absolute -bottom-8 left-0 right-0 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-              <span>{frameW}×{frameH}px · {slots.length} {slots.length === 1 ? 'slot' : 'slots'}</span>
+              <span>{frameW}×{frameH}px · {slots.length} {slots.length === 1 ? 'slot' : 'slots'}{snapEnabled ? ` · Grid ${gridSize}px` : ''}</span>
               <span>Zoom: {Math.round(zoom * 100)}%</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ─── Guide Modal ─── */}
+      {showGuide && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowGuide(false) }}
+        >
+          <div className="bg-(--panel-bg) border border-(--overlay-border) rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[88vh]">
+
+            {/* Header */}
+            <div className="flex items-center gap-3 p-4 border-b border-(--overlay-border)">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center shrink-0">
+                <Info className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm text-(--text-primary) leading-tight">Hướng dẫn tạo Frame chuẩn</h3>
+                <p className="text-[11px] text-(--text-muted) mt-0.5">Chọn cách phù hợp với bạn bên dưới</p>
+              </div>
+              <button
+                onClick={() => setShowGuide(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-muted) transition-all cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto space-y-3">
+
+              {/* Method 1 */}
+              <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎨</span>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#3B82F6]">Cách 1 — Canva / Figma (Khuyên dùng)</h4>
+                </div>
+                <p className="text-xs text-(--text-secondary) leading-relaxed">
+                  Thiết kế khung với <b className="text-(--text-primary)">nền trong suốt (transparent)</b>. Các ô trống để ảnh sẽ tự nhận diện chính xác nhất.
+                </p>
+                <div className="space-y-1.5 text-xs text-(--text-muted)">
+                  <div className="flex gap-2">
+                    <span className="shrink-0 font-bold text-(--text-secondary)">Canva:</span>
+                    <span>Khi tải xuống, chọn PNG và bật <span className="italic font-semibold text-(--text-primary)">&quot;Transparent background&quot;</span> (cần Canva Pro).</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="shrink-0 font-bold text-(--text-secondary)">Figma / PS:</span>
+                    <span>Xuất file PNG với nền trong suốt bình thường là xong.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Method 2 */}
+              <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🤖</span>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#FF6B4A]">Cách 2 — Dùng AI tạo ảnh</h4>
+                </div>
+                <p className="text-xs text-(--text-secondary) leading-relaxed">
+                  AI không xuất được nền trong suốt, hãy yêu cầu AI tạo khoảng trống <b className="text-(--text-primary)">màu trắng tinh</b>. App sẽ tự nhận diện và biến chúng thành slot.
+                </p>
+
+                {/* Prompt box */}
+                <div className="rounded-lg bg-(--background) border border-(--overlay-border) p-3 space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-(--text-muted) flex items-center gap-1">
+                    <span>💡</span> Prompt mẫu (copy & paste):
+                  </p>
+                  <p className="text-[11px] text-(--text-secondary) italic leading-relaxed select-all cursor-text">
+                    A photobooth frame template, cosmic space theme, with completely solid WHITE rectangular photo slots in a 3x2 grid. Decorated with astronauts and planets. Photo slots MUST be totally plain white. 2d flat vector illustration --ar 2:3
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-(--overlay-border)">
+              <button
+                onClick={() => setShowGuide(false)}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer bg-linear-to-r from-[#FF6B4A] to-[#FF8B6A] hover:opacity-90 shadow-lg shadow-[#FF6B4A]/20"
+              >
+                Đã hiểu! Bắt đầu tạo frame 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
