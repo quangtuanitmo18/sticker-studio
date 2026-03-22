@@ -24,7 +24,8 @@ export default function VideoPreview({
 }: VideoPreviewProps) {
   const [thumbnails, setThumbnails] = useState<string[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
-  const [dragging, setDragging] = useState<'start' | 'end' | null>(null)
+  const [dragging, setDragging] = useState<'start' | 'end' | 'window' | null>(null)
+  const dragSession = useRef<{ startX: number; startTrimStart: number; startTrimEnd: number; isClick: boolean } | null>(null)
 
   useEffect(() => {
     if (!videoElement || duration === 0) return
@@ -75,16 +76,49 @@ export default function VideoPreview({
       const newStart = Math.min(timeAtX, trimEnd - 0.5) // Min 0.5s duration
       onTrimChange(newStart, trimEnd)
       onSeek(newStart)
-    } else {
+    } else if (dragging === 'end') {
       const newEnd = Math.max(timeAtX, trimStart + 0.5)
       onTrimChange(trimStart, newEnd)
       onSeek(newEnd)
+    } else if (dragging === 'window' && dragSession.current) {
+      const deltaX = e.clientX - dragSession.current.startX
+      if (Math.abs(deltaX) > 3) {
+        dragSession.current.isClick = false
+      }
+
+      if (!dragSession.current.isClick) {
+        const deltaTime = (deltaX / rect.width) * duration
+        const session = dragSession.current
+        const windowDuration = session.startTrimEnd - session.startTrimStart
+        
+        let newStart = session.startTrimStart + deltaTime
+        let newEnd = session.startTrimEnd + deltaTime
+
+        if (newStart < 0) {
+          newStart = 0
+          newEnd = windowDuration
+        }
+        if (newEnd > duration) {
+          newEnd = duration
+          newStart = duration - windowDuration
+        }
+
+        onTrimChange(newStart, newEnd)
+        onSeek(newStart)
+      }
     }
   }, [dragging, duration, trimStart, trimEnd, onTrimChange, onSeek])
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: PointerEvent) => {
+    if (dragging === 'window' && dragSession.current?.isClick && containerRef.current && duration > 0) {
+      // It was just a click, perform seek
+      const rect = containerRef.current.getBoundingClientRect()
+      const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+      const timeAtX = (x / rect.width) * duration
+      onSeek(timeAtX)
+    }
     setDragging(null)
-  }, [])
+  }, [dragging, duration, onSeek])
 
   useEffect(() => {
     if (dragging) {
@@ -164,8 +198,18 @@ export default function VideoPreview({
 
       {/* Active Trim Overlay */}
       <div 
-        className="absolute inset-y-0 bg-[#FF6B4A]/20 border-y-2 border-[#FF6B4A] pointer-events-none z-10"
+        className="absolute inset-y-0 bg-[#FF6B4A]/20 border-y-2 border-[#FF6B4A] z-[25] cursor-move active:cursor-grabbing"
         style={{ left: `${trimStartPct}%`, width: `${trimEndPct - trimStartPct}%` }}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          setDragging('window')
+          dragSession.current = {
+            startX: e.clientX,
+            startTrimStart: trimStart,
+            startTrimEnd: trimEnd,
+            isClick: true
+          }
+        }}
       />
 
       {/* Excluded regions darkening */}

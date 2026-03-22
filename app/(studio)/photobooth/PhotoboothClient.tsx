@@ -623,12 +623,7 @@ export default function PhotoboothPage() {
                 </Button>
               </div>
             )}
-            {arLoading && (
-              <div className="flex items-center gap-2 mt-2 text-[11px] text-(--text-muted)">
-                <div className="w-3 h-3 border-2 border-[#FF6B4A] border-t-transparent rounded-full animate-spin" />
-                Loading AR engine...
-              </div>
-            )}
+
           </Sec>
 
           {/* Category */}

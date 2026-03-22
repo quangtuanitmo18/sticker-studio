@@ -93,6 +93,10 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         await mindarThree.start()
         setIsRunning(true)
 
+        // Hide MindAR's built-in loading overlay after AR starts
+        const overlay = containerRef.current?.querySelector?.('[id*="mindar"], [class*="mindar"]') as HTMLElement | null
+        if (overlay) overlay.style.display = 'none'
+
         // CRITICAL: preserve WebGL buffer after each frame so captureFrame() can read it
         renderer.preserveDrawingBuffer = true
 
@@ -427,16 +431,8 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
 
     return (
       <>
-        {/* Fix MindAR loading spinner: force it to center inside the container */}
-        <style>{`
-          #mindar-ui-overlay {
-            position: absolute !important;
-            inset: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-          }
-        `}</style>
+        {/* Hide MindAR's default loading overlay via global CSS override */}
+        <style>{`#mindar-ui-overlay, .mindar-ui-overlay { display: none !important; }`}</style>
         <div
           ref={containerRef}
           className={`relative w-full overflow-hidden ${className}`}
