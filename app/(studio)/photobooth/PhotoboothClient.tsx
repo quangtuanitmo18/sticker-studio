@@ -9,6 +9,7 @@ import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
 import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
+import { AR_CATEGORIES, AR_FILTERS, type ARFilter } from '@/lib/ar-filters'
 import { downloadUrl } from '@/lib/download'
 import { FILTER_CATEGORIES, IMAGE_FILTERS } from '@/lib/image-filters'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
@@ -22,13 +23,16 @@ import {
   Minus,
   Plus,
   Redo2,
-  RefreshCw, RotateCcw, Settings, Sparkles,
+  RefreshCw, RotateCcw, ScanFace, Settings, Sparkles,
   SwitchCamera,
   Trash2, Type,
   Undo2,
   X
 } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+const ARFaceFilter = dynamic(() => import('@/components/shared/ARFaceFilter'), { ssr: false })
 import type { FrameTemplate } from '../frame-editor/FrameEditorClient'
 import FrameEditorClient from '../frame-editor/FrameEditorClient'
 import {
@@ -62,7 +66,7 @@ const CSS_FILTER_PREVIEW: Record<string, string> = {
   vignette: '',
 }
 
-type SideTab = 'capture' | 'filters' | 'text' | 'assets' | 'adjust' | 'frames'
+type SideTab = 'capture' | 'filters' | 'arfilters' | 'text' | 'assets' | 'adjust' | 'frames'
 
 export default function PhotoboothPage() {
   // Camera
@@ -123,6 +127,13 @@ export default function PhotoboothPage() {
   const [showCurtain, setShowCurtain] = useState(false)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
   const [showExport, setShowExport] = useState(false)
+
+  // AR Face Filters
+  const [arEnabled, setArEnabled] = useState(false)
+  const [activeARFilters, setActiveARFilters] = useState<ARFilter[]>([])
+  const [arFilterCategory, setArFilterCategory] = useState<string>('facepaint')
+  const [arLoading, setArLoading] = useState(false)
+  const arRef = useRef<import('@/components/shared/ARFaceFilter').ARFaceFilterHandle>(null)
 
   const previewRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
@@ -194,6 +205,11 @@ export default function PhotoboothPage() {
 
   // ─── Capture ───────────────────────────────────────────────
   const capturePhoto = useCallback(() => {
+    // AR mode: capture from WebGL canvas
+    if (arEnabled && arRef.current) {
+      return arRef.current.captureFrame()
+    }
+    // Normal mode: capture from video
     if (!videoRef.current || !cameraActive) return null
     const v = videoRef.current
     const canvas = document.createElement('canvas')
@@ -207,7 +223,7 @@ export default function PhotoboothPage() {
       if (f) f.apply(ctx, canvas)
     }
     return canvas
-  }, [cameraActive, mirrored, brightness, contrast, saturation, activeFilter])
+  }, [arEnabled, cameraActive, mirrored, brightness, contrast, saturation, activeFilter])
 
   const triggerFlash = () => {
     setShowFlash(true); setTimeout(() => setShowFlash(false), 300)
@@ -460,11 +476,29 @@ export default function PhotoboothPage() {
     finally { setIsExporting(false) }
   }
 
+  const toggleARFilter = useCallback((filter: ARFilter) => {
+    setActiveARFilters(prev => {
+      const exists = prev.find(f => f.id === filter.id)
+      if (exists) return prev.filter(f => f.id !== filter.id)
+      return [...prev, filter]
+    })
+  }, [])
+
+  const enableAR = useCallback(() => {
+    if (cameraActive) stopCamera()
+    setArEnabled(true)
+  }, [cameraActive, stopCamera])
+
+  const disableAR = useCallback(() => {
+    if (arRef.current) arRef.current.stop()
+    setArEnabled(false)
+    setActiveARFilters([])
+  }, [])
+
   const SIDE = [
     { id: 'capture' as SideTab, label: 'Capture', icon: <Camera className="w-3.5 h-3.5" /> },
+    { id: 'arfilters' as SideTab, label: 'AR', icon: <ScanFace className="w-3.5 h-3.5" /> },
     { id: 'filters' as SideTab, label: 'Filters', icon: <Sparkles className="w-3.5 h-3.5" /> },
-
-
     { id: 'text' as SideTab, label: 'Text', icon: <Type className="w-3.5 h-3.5" /> },
     { id: 'assets' as SideTab, label: 'Assets', icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'frames' as SideTab, label: 'Frames', icon: <Frame className="w-3.5 h-3.5" /> },
@@ -575,9 +609,87 @@ export default function PhotoboothPage() {
           <Sec title="Filters"><div className="grid grid-cols-3 gap-1.5">{IMAGE_FILTERS.filter(f => f.id === 'none' || f.category === activeFilterCategory).map(f => <button key={f.id} onClick={() => setActiveFilter(f.id)} className={`py-3 rounded-lg text-center transition-all cursor-pointer ${activeFilter === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}><span className="text-lg block mb-0.5">{f.emoji}</span><span className="text-[10px]">{f.label}</span></button>)}</div></Sec>
         </>}
 
+        {sideTab === 'arfilters' && <>
+          {/* AR Enable / Disable */}
+          <Sec title="AR Camera">
+            {!arEnabled ? (
+              <Button onClick={enableAR} className="w-full gap-2">
+                <ScanFace className="w-4 h-4" /> Start AR Camera
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button onClick={disableAR} variant="ghost" className="flex-1 gap-1 text-red-400">
+                  <X className="w-3.5 h-3.5" /> Stop AR
+                </Button>
+              </div>
+            )}
+            {arLoading && (
+              <div className="flex items-center gap-2 mt-2 text-[11px] text-(--text-muted)">
+                <div className="w-3 h-3 border-2 border-[#FF6B4A] border-t-transparent rounded-full animate-spin" />
+                Loading AR engine...
+              </div>
+            )}
+          </Sec>
 
+          {/* Category */}
+          <Sec title="Category">
+            <div className="flex gap-1 overflow-x-auto">
+              {AR_CATEGORIES.map(c => (
+                <button key={c.id} onClick={() => setArFilterCategory(c.id)}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer whitespace-nowrap ${arFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border)'}`}>
+                  {c.emoji} {c.label}
+                </button>
+              ))}
+            </div>
+          </Sec>
 
+          {/* Filter Grid */}
+          <Sec title="Face Filters">
+            <div className="grid grid-cols-3 gap-1.5">
+              {AR_FILTERS.filter(f => f.category === arFilterCategory).map(f => {
+                const isActive = activeARFilters.some(af => af.id === f.id)
+                return (
+                  <button key={f.id} onClick={() => { toggleARFilter(f); if (!arEnabled) enableAR() }}
+                    className={`py-2 rounded-lg text-center transition-all cursor-pointer ${isActive ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}>
+                    {f.thumbnail ? (
+                      <div className="w-10 h-10 mx-auto mb-1 rounded-full overflow-hidden bg-black/30">
+                        <img src={f.thumbnail} alt={f.label} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <span className="text-lg block mb-0.5">{f.emoji}</span>
+                    )}
+                    <span className="text-[10px] block">{f.label}</span>
+                    {f.type === 'facemesh' && <span className="text-[8px] text-(--text-muted) block">🎨 Face Paint</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </Sec>
 
+          {/* Active Filters Summary */}
+          {activeARFilters.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">
+                Active ({activeARFilters.length})
+              </label>
+              <div className="flex flex-wrap gap-1">
+                {activeARFilters.map(f => (
+                  <span key={f.id} onClick={() => toggleARFilter(f)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#FF6B4A]/10 text-[#FF6B4A] text-[10px] font-semibold cursor-pointer hover:bg-[#FF6B4A]/20 transition-all">
+                    {f.emoji} {f.label} <X className="w-2.5 h-2.5" />
+                  </span>
+                ))}
+              </div>
+              <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary) mt-1" onClick={() => setActiveARFilters([])}>
+                <RotateCcw className="w-3 h-3" /> Clear All
+              </Button>
+            </div>
+          )}
+
+          <p className="text-[10px] text-(--text-muted)">
+            💡 Click a filter to add it, click again to remove. Multiple filters can be stacked!
+          </p>
+        </>}
 
         {sideTab === 'text' && <TextPanel 
             text={stickerText} 
@@ -719,23 +831,53 @@ export default function PhotoboothPage() {
             }}
           >
           <div 
-            className="w-full h-full flex flex-col items-center justify-start p-4 gap-4 origin-top-left transition-transform duration-200"
+            className="w-full h-full flex flex-col lg:flex-row items-center justify-center p-4 lg:p-6 gap-6 lg:gap-8 origin-top-left transition-transform duration-200"
             style={{ transform: `scale(${zoom})`, width: `${(1 / zoom) * 100}%`, height: `${(1 / zoom) * 100}%` }}
           >
-            {/* Camera */}
+            {/* Camera — Normal or AR */}
             <div className="relative w-full lg:max-w-[640px]">
               <div className="relative rounded-none lg:rounded-2xl overflow-hidden shadow-2xl">
-                <div className="relative rounded-none lg:rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
-                  <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: mirrored ? 'scaleX(-1)' : 'none', filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }} playsInline muted autoPlay />
-                  {!cameraActive && <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)"><Camera className="w-16 h-16 mb-4 opacity-20" /><p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p></div>}
-                  {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
-                  {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
-                  {isBursting && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /><span className="text-xs font-bold text-white">RECORDING</span></div>}
-                  {activeFilter !== 'none' && cameraActive && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10"><span className="text-[10px] text-white font-medium">{IMAGE_FILTERS.find(f => f.id === activeFilter)?.emoji} {IMAGE_FILTERS.find(f => f.id === activeFilter)?.label}</span></div>}
-                </div>
+                {arEnabled ? (
+                  /* ──── AR Camera (MindAR + Three.js) ──── */
+                  <div className="relative">
+                    <ARFaceFilter
+                      ref={arRef}
+                      activeFilters={activeARFilters}
+                      className="rounded-none lg:rounded-xl"
+                      onReady={() => toast('🎭 AR Camera ready!', 'success')}
+                      onError={(err) => { toast(`AR Error: ${err}`, 'error'); disableAR() }}
+                      onLoading={setArLoading}
+                    />
+                    {/* AR badge */}
+                    <div className="absolute top-3 left-3 bg-linear-to-r from-[#FF6B4A] to-[#EC4899] px-2.5 py-1 rounded-full z-10 flex items-center gap-1.5">
+                      <ScanFace className="w-3 h-3 text-white" />
+                      <span className="text-[10px] text-white font-bold">AR LIVE</span>
+                    </div>
+                    {/* Active filters indicator */}
+                    {activeARFilters.length > 0 && (
+                      <div className="absolute top-3 right-3 bg-black/50 backdrop-blur px-2 py-1 rounded-full z-10">
+                        <span className="text-[10px] text-white font-medium">
+                          {activeARFilters.map(f => f.emoji).join(' ')}
+                        </span>
+                      </div>
+                    )}
+                    {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
+                    {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
+                  </div>
+                ) : (
+                  /* ──── Normal Camera ──── */
+                  <div className="relative rounded-none lg:rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
+                    <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: mirrored ? 'scaleX(-1)' : 'none', filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }} playsInline muted autoPlay />
+                    {!cameraActive && !arEnabled && <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)"><Camera className="w-16 h-16 mb-4 opacity-20" /><p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p></div>}
+                    {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
+                    {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
+                    {isBursting && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /><span className="text-xs font-bold text-white">RECORDING</span></div>}
+                    {activeFilter !== 'none' && cameraActive && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10"><span className="text-[10px] text-white font-medium">{IMAGE_FILTERS.find(f => f.id === activeFilter)?.emoji} {IMAGE_FILTERS.find(f => f.id === activeFilter)?.label}</span></div>}
+                  </div>
+                )}
               </div>
-              {/* Desktop capture button */}
-              {cameraActive && <div className="hidden lg:flex justify-center mt-4"><button onClick={handleCapture} disabled={countdown > 0 || isBursting} className="w-16 h-16 rounded-full border-4 border-(--overlay-border-hover) bg-white hover:bg-stone-100 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-xl disabled:opacity-50 touch-manipulation">{burstMode ? <Grid className="w-6 h-6 text-[#FF6B4A]" /> : <div className="w-10 h-10 rounded-full bg-[#FF6B4A]" />}</button></div>}
+              {/* Desktop capture button — works for both AR and normal camera */}
+              {(cameraActive || arEnabled) && <div className="hidden lg:flex justify-center mt-4"><button onClick={handleCapture} disabled={countdown > 0 || isBursting} className="w-16 h-16 rounded-full border-4 border-(--overlay-border-hover) bg-white hover:bg-stone-100 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-xl disabled:opacity-50 touch-manipulation">{burstMode ? <Grid className="w-6 h-6 text-[#FF6B4A]" /> : <div className="w-10 h-10 rounded-full bg-[#FF6B4A]" />}</button></div>}
             </div>
 
             {/* Strip / Frame preview — always show when not in review mode */}

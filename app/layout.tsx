@@ -133,6 +133,17 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
+        {/* MindAR requires import map for CDN loading — must be static in head before any module scripts */}
+        <script
+          type="importmap"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify({
+            imports: {
+              'three': 'https://unpkg.com/three@0.153.0/build/three.module.js',
+              'three/addons/': 'https://unpkg.com/three@0.153.0/examples/jsm/',
+              'mindar-face-three': 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-three.prod.js',
+            }
+          })}}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
