@@ -23,6 +23,8 @@ interface FrameEditorProps {
   onSave?: (frame: FrameTemplate) => void
   /** Called to close the editor (embedded mode) */
   onClose?: () => void
+  /** Pre-load an existing template for editing */
+  initialTemplate?: FrameTemplate
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -65,7 +67,7 @@ function saveTemplates(templates: FrameTemplate[]) {
 function uid() { return `slot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }
 
 // ─── Component ──────────────────────────────────────────────
-export default function FrameEditorClient({ embedded = false, onSave, onClose }: FrameEditorProps = {}) {
+export default function FrameEditorClient({ embedded = false, onSave, onClose, initialTemplate }: FrameEditorProps = {}) {
   const { toast } = useToast()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -131,6 +133,24 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
   const [hasTransparency, setHasTransparency] = useState(false)
 
   useEffect(() => { setSavedTemplates(loadSavedTemplates()) }, [])
+
+  // Load initial template for editing
+  useEffect(() => {
+    if (!initialTemplate) return
+    setFrameName(initialTemplate.name)
+    setFrameW(initialTemplate.width)
+    setFrameH(initialTemplate.height)
+    setSlots(initialTemplate.slots)
+    setFrameDataUrl(initialTemplate.frameDataUrl)
+    setSelectedId(null)
+    if (initialTemplate.frameDataUrl) {
+      const img = new Image()
+      img.onload = () => setFrameImg(img)
+      img.src = initialTemplate.frameDataUrl
+    } else {
+      setFrameImg(null)
+    }
+  }, [initialTemplate])
 
   // Load sample images
   useEffect(() => {
@@ -231,7 +251,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
         return
       }
       const newSlots: FrameSlot[] = detected.map(d => ({
-        id: uid(), x: d.x, y: d.y, w: d.w, h: d.h, rotation: 0, radius: 8
+        id: uid(), x: d.x, y: d.y, w: d.w, h: d.h, rotation: 0, radius: 8,
       }))
       setSlots(newSlots)
       setSelectedId(null)
@@ -301,8 +321,8 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
         const isSelected = slot.id === selectedId
         ctx.save()
 
-        // Slot fill
-        ctx.fillStyle = isSelected ? 'rgba(255, 107, 74, 0.15)' : 'rgba(59, 130, 246, 0.08)'
+        // Slot fill — slightly more visible
+        ctx.fillStyle = isSelected ? 'rgba(255, 107, 74, 0.18)' : 'rgba(59, 130, 246, 0.12)'
         if (slot.radius > 0) {
           roundRect(ctx, slot.x, slot.y, slot.w, slot.h, slot.radius)
           ctx.fill()
@@ -310,10 +330,13 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
           ctx.fillRect(slot.x, slot.y, slot.w, slot.h)
         }
 
-        // Slot border
+        // Slot border — always 2px on screen regardless of canvas scale
+        const borderPx = (isSelected ? 2.5 : 2) / scale
+        const dashA = 6 / scale
+        const dashB = 4 / scale
         ctx.strokeStyle = isSelected ? '#FF6B4A' : '#3b82f6'
-        ctx.lineWidth = isSelected ? 2.5 : 1.5
-        ctx.setLineDash(isSelected ? [] : [6, 4])
+        ctx.lineWidth = borderPx
+        ctx.setLineDash(isSelected ? [] : [dashA, dashB])
         if (slot.radius > 0) {
           roundRect(ctx, slot.x, slot.y, slot.w, slot.h, slot.radius)
           ctx.stroke()
@@ -322,18 +345,20 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
         }
         ctx.setLineDash([])
 
-        // Label
+        // Label — scale font so it's legible at any zoom
+        const fontSize = Math.max(10, Math.round(13 / scale))
+        const subFontSize = Math.max(8, Math.round(10 / scale))
         ctx.fillStyle = isSelected ? '#FF6B4A' : '#3b82f6'
-        ctx.font = 'bold 13px Inter, system-ui, sans-serif'
+        ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(`${i + 1}`, slot.x + slot.w / 2, slot.y + slot.h / 2)
-        ctx.font = '10px Inter, system-ui, sans-serif'
-        ctx.fillText(`${Math.round(slot.w)}×${Math.round(slot.h)}`, slot.x + slot.w / 2, slot.y + slot.h / 2 + 16)
+        ctx.font = `${subFontSize}px Inter, system-ui, sans-serif`
+        ctx.fillText(`${Math.round(slot.w)}×${Math.round(slot.h)}`, slot.x + slot.w / 2, slot.y + slot.h / 2 + fontSize + 2)
 
-        // Resize handles (selected only)
+        // Resize handles (selected only) — consistent 8px screen size
         if (isSelected) {
-          const handleSize = 8
+          const handleSize = 8 / scale
           const handles = [
             { x: slot.x, y: slot.y },
             { x: slot.x + slot.w, y: slot.y },
@@ -343,7 +368,8 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose }:
           handles.forEach(h => {
             ctx.fillStyle = '#fff'
             ctx.strokeStyle = '#FF6B4A'
-            ctx.lineWidth = 2
+            ctx.lineWidth = 2 / scale
+            ctx.setLineDash([])
             ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize)
             ctx.strokeRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize)
           })
