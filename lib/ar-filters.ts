@@ -17,14 +17,14 @@
  *    234 = left ear     454 = right ear
  */
 
-export type ARFilterType = 'facemesh' | 'model' | 'overlay'
+export type ARFilterType = 'facemesh' | 'model' | 'overlay' | 'distortion'
 
 export interface ARFilter {
   id: string
   label: string
   emoji: string
   type: ARFilterType
-  category: 'facepaint' | 'accessories' | 'fun'
+  category: 'facepaint' | 'accessories' | 'fun' | 'makeup' | 'distortion'
 
   /** Face mesh texture URL (for type: 'facemesh') */
   textureUrl?: string
@@ -45,6 +45,15 @@ export interface ARFilter {
   rotation?: [number, number, number]
   /** Thumbnail for sidebar preview (falls back to emoji) */
   thumbnail?: string
+
+  /** Distortion parameters (for type: 'distortion') */
+  distortionConfig?: {
+    leftEye?: { radius: number; strength: number }
+    rightEye?: { radius: number; strength: number }
+    chin?: { radius: number; strength: number }
+    nose?: { radius: number; strength: number }
+    mouth?: { radius: number; strength: number }
+  }
 }
 
 // ─── Filters ───────────────────────────────────────────────
@@ -102,6 +111,44 @@ export const AR_FILTERS: ARFilter[] = [
     thumbnail: '/ar-assets/tiger-face.png',
   },
 
+  // === Makeup (facemesh type) ===
+  {
+    id: 'makeup-blush',
+    label: 'Rosy Blush',
+    emoji: '😊',
+    type: 'facemesh',
+    category: 'makeup',
+    textureUrl: '/ar-assets/makeup-blush.png',
+    scale: 1,
+  },
+  {
+    id: 'makeup-freckles',
+    label: 'Freckles',
+    emoji: '🤎',
+    type: 'facemesh',
+    category: 'makeup',
+    textureUrl: '/ar-assets/makeup-freckles.png',
+    scale: 1,
+  },
+  {
+    id: 'makeup-lip-tint',
+    label: 'Lip Tint',
+    emoji: '💋',
+    type: 'facemesh',
+    category: 'makeup',
+    textureUrl: '/ar-assets/makeup-lip-tint.png',
+    scale: 1,
+  },
+  {
+    id: 'makeup-eyeliner',
+    label: 'Cat-Eye Liner',
+    emoji: '👁️',
+    type: 'facemesh',
+    category: 'makeup',
+    textureUrl: '/ar-assets/makeup-eyeliner.png',
+    scale: 1,
+  },
+
   // === Accessories (overlay for now, upgrade to GLTF later) ===
 //   Bạn điền scale: 1.0 => Kính rộng chuẩn bằng 2 viền má.
 // Bạn điền scale: 1.1 => Kính to hơn mặt 10%.
@@ -140,7 +187,7 @@ export const AR_FILTERS: ARFilter[] = [
     emoji: '🎩',
     type: 'model',
     category: 'accessories',
-     modelUrl: '/ar-assets/top-hat.glb',
+    modelUrl: '/ar-assets/top-hat.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f3a9.svg',
     scale: 1.7,           // Nhỏ lại
@@ -149,37 +196,60 @@ export const AR_FILTERS: ARFilter[] = [
     rotation: [0, 0, 0],
   },
   {
-    id: 'cap',
-    label: 'Billed Cap',
+    id: 'baseball-cap',
+    label: 'Baseball Cap',
     emoji: '🧢',
-    type: 'overlay',
+    type: 'model',
     category: 'accessories',
-    anchorIndex: 10,
+    modelUrl: '/ar-assets/baseball-cap.glb', 
+    anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9e2.svg',
-    scale: 0.55,
-    offsetY: -0.15,
+    scale: 1.7,           // Nhỏ lại
+    offsetY: 1,         // Hạ xuống thấp hơn
+    offsetZ: -0.7,        // Lùi lại gần đầu hơn
+    rotation: [0, 0, 0],
   },
   {
-    id: 'butterfly',
-    label: 'Butterfly',
-    emoji: '🦋',
-    type: 'overlay',
+    id: 'graduation-cap',
+    label: 'Graduation Cap',
+    emoji: '🎓',
+    type: 'model',
     category: 'accessories',
-    anchorIndex: 10,
-    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f98b.svg',
-    scale: 0.4,
-    offsetY: -0.25,
+    modelUrl: '/ar-assets/graduation-cap.glb', 
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f393.svg',
+    scale: 1.7,           // Nhỏ lại
+    offsetY: 1,         // Hạ xuống thấp hơn
+    offsetZ: -0.7,        // Lùi lại gần đầu hơn
+    rotation: [0, 0, 0],
   },
   {
-    id: 'flower',
-    label: 'Flower',
-    emoji: '🌸',
-    type: 'overlay',
+    id: 'wizard-hat',
+    label: 'Wizard Hat',
+    emoji: '🧙',
+    type: 'model',
     category: 'accessories',
-    anchorIndex: 10,
-    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f338.svg',
-    scale: 0.35,
-    offsetY: -0.2,
+    modelUrl: '/ar-assets/wizard-hat.glb', 
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9d9.svg',
+    scale: 1.7,           // Nhỏ lại
+    offsetY: 1,         // Hạ xuống thấp hơn
+    offsetZ: -0.7,        // Lùi lại gần đầu hơn
+    rotation: [0, 0, 0],
+  },
+  {  
+    id: 'security-hat',
+    label: 'Security Hat',
+    emoji: '👮',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/security-hat.glb', 
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f46e.svg',
+    scale: 1.4,           // Đã thu nhỏ lại một chút cho vừa đầu
+    offsetY: 0.7,         // Hạ thấp xuống để ôm sát đầu hơn (trước là 1)
+    offsetZ: -0.7,        // Lùi lại gần đầu hơn
+    rotation: [0, 0, 0], // Xoay ngang 90 độ (trục Y)
   },
 
   // === Fun (overlay) ===
@@ -249,12 +319,55 @@ export const AR_FILTERS: ARFilter[] = [
     scale: 0.15,
     offsetY: 0,
   },
+
+  // === Distortion (bóp méo mặt - Temporarily Disabled) ===
+  /*
+  {
+    id: 'big-eyes',
+    label: 'Big Eyes',
+    emoji: '👀',
+    type: 'distortion',
+    category: 'distortion',
+    scale: 1, // không dùng
+    distortionConfig: {
+      leftEye: { radius: 0.15, strength: 0.5 },
+      rightEye: { radius: 0.15, strength: 0.5 },
+    }
+  },
+  {
+    id: 'alien-face',
+    label: 'Alien',
+    emoji: '👽',
+    type: 'distortion',
+    category: 'distortion',
+    scale: 1,
+    distortionConfig: {
+      leftEye: { radius: 0.2, strength: 0.8 },
+      rightEye: { radius: 0.2, strength: 0.8 },
+      chin: { radius: 0.3, strength: -0.8 },
+      nose: { radius: 0.1, strength: -0.5 },
+    }
+  },
+  {
+    id: 'v-line',
+    label: 'V-Line',
+    emoji: '✨',
+    type: 'distortion',
+    category: 'distortion',
+    scale: 1,
+    distortionConfig: {
+      chin: { radius: 0.25, strength: -0.6 },
+    }
+  },
+  */
 ]
 
 // ─── Categories ────────────────────────────────────────────
 
 export const AR_CATEGORIES = [
   { id: 'facepaint', emoji: '🎨', label: 'Face Paint' },
+  { id: 'makeup', emoji: '💄', label: 'Makeup' },
   { id: 'accessories', emoji: '👑', label: 'Accessories' },
+  // { id: 'distortion', emoji: '👽', label: 'Distort' }, // Tạm ẩn
   { id: 'fun', emoji: '😜', label: 'Fun' },
 ] as const

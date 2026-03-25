@@ -136,6 +136,7 @@ export default function PhotoboothPage() {
   const [arFilterCategory, setArFilterCategory] = useState<string>('facepaint')
   const [arLoading, setArLoading] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
+  const [switchToBg, setSwitchToBg] = useState<string | null>(null)
   const arRef = useRef<import('@/components/shared/ARFaceFilter').ARFaceFilterHandle>(null)
 
   const previewRef = useRef<HTMLDivElement>(null)
@@ -502,24 +503,39 @@ export default function PhotoboothPage() {
   }, [])
 
   const enableAR = useCallback(() => {
+    if (cameraActive) {
+      const currentPhoto = capturePhoto()
+      if (currentPhoto) setSwitchToBg(currentPhoto.toDataURL())
+    }
+    
     setIsSwitching(true)
     if (cameraActive) stopCamera()
     setArEnabled(true)
-    // arLoading state (controlled by onLoading callback) will handle spinner display
-    setTimeout(() => setIsSwitching(false), 500)
-  }, [cameraActive, stopCamera])
+    
+    setTimeout(() => {
+      setIsSwitching(false)
+      setTimeout(() => setSwitchToBg(null), 300)
+    }, 500)
+  }, [cameraActive, stopCamera, capturePhoto])
 
   const disableAR = useCallback(() => {
+    if (arEnabled && arRef.current) {
+      const currentPhoto = capturePhoto()
+      if (currentPhoto) setSwitchToBg(currentPhoto.toDataURL())
+    }
+
     setIsSwitching(true)
     if (arRef.current) arRef.current.stop()
     setArEnabled(false)
     setActiveARFilters([])
-    // Resume normal camera exactly as it was
+    
+    // Resume normal camera smoothly
     setTimeout(async () => {
       await startCamera(facingMode)
       setIsSwitching(false)
-    }, 500)
-  }, [facingMode, startCamera])
+      setTimeout(() => setSwitchToBg(null), 300)
+    }, 300)
+  }, [arEnabled, facingMode, startCamera, capturePhoto])
 
   // Auto-stop AR when no filters are active
   useEffect(() => {
@@ -867,6 +883,7 @@ export default function PhotoboothPage() {
                   >
                     <ARFaceFilter
                       ref={arRef}
+                      mirrored={mirrored}
                       activeFilters={activeARFilters}
                       className="rounded-none lg:rounded-xl"
                       onReady={() => toast('🎭 AR Camera ready!', 'success')}
@@ -896,16 +913,23 @@ export default function PhotoboothPage() {
                   <div className="relative rounded-none lg:rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
                     <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: mirrored ? 'scaleX(-1)' : 'none', filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }} playsInline muted autoPlay />
                     {!cameraActive && !arEnabled && !isSwitching && <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)"><Camera className="w-16 h-16 mb-4 opacity-20" /><p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p></div>}
-                    {isSwitching && !arEnabled && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-20">
-                         <Loader2 className="w-8 h-8 text-[#FF6B4A] animate-spin mb-3" />
-                         <span className="text-white text-xs font-semibold tracking-wide">Starting lenses...</span>
-                      </div>
-                    )}
                     {activeFilter !== 'none' && cameraActive && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10"><span className="text-[10px] text-white font-medium">{IMAGE_FILTERS.find(f => f.id === activeFilter)?.emoji} {IMAGE_FILTERS.find(f => f.id === activeFilter)?.label}</span></div>}
                     {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
                     {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
                     {isBursting && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /><span className="text-xs font-bold text-white">RECORDING</span></div>}
+                  </div>
+                )}
+                
+                {/* Smooth Transition Ghost Frame */}
+                {switchToBg && (
+                  <div className={`absolute inset-0 z-40 bg-black transition-opacity duration-300 pointer-events-none ${isSwitching ? 'opacity-100' : 'opacity-0'}`}>
+                     <img src={switchToBg} alt="" className="w-full h-full object-cover" />
+                     {isSwitching && (
+                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
+                         <Loader2 className="w-8 h-8 text-[#FF6B4A] animate-spin mb-3 drop-shadow-xl" />
+                         <span className="text-white text-xs font-semibold tracking-wide drop-shadow-md">Switching lenses...</span>
+                       </div>
+                     )}
                   </div>
                 )}
               </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import type { ARFilter } from '@/lib/ar-filters'
+import { FaceWarpShader } from '@/lib/face-warp-shader'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 
 export interface ARFaceFilterHandle {
@@ -14,6 +15,7 @@ interface ARFaceFilterProps {
   onReady?: () => void
   onError?: (error: string) => void
   onLoading?: (loading: boolean) => void
+  mirrored?: boolean
 }
 
 // ─── CDN loader ──────────────────────────────────────────────
@@ -34,7 +36,7 @@ async function loadMindAR(): Promise<{ MindARThree: any; THREE: any }> {
 // ─── Component ───────────────────────────────────────────────
 
 const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
-  ({ activeFilters, className = '', onReady, onError, onLoading }, ref) => {
+  ({ activeFilters, className = '', onReady, onError, onLoading, mirrored = true }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const mindarRef = useRef<any>(null)
     const anchorsRef = useRef<Map<number, any>>(new Map())
@@ -43,6 +45,14 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
     const faceMeshFilterIdRef = useRef<string | null>(null)
     const occluderMeshRef = useRef<any>(null)
     const THREERef = useRef<any>(null)
+
+    // Warping Shader Post-Processing Refs
+    const bgSceneRef = useRef<any>(null)
+    const bgCameraRef = useRef<any>(null)
+    const bgMaterialRef = useRef<any>(null)
+    const videoTextureRef = useRef<any>(null)
+    const distortionActiveRef = useRef<boolean>(false)
+    const distortionParamsRef = useRef<any>(null)
 
     // Use STATE for isRunning so filter sync useEffect retriggers when AR starts
     const [isRunning, setIsRunning] = useState(false)
@@ -72,6 +82,17 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         disposeMesh(occluderMeshRef.current)
         occluderMeshRef.current = null
       }
+      
+      // Cleanup WebGL textures
+      if (videoTextureRef.current) {
+        videoTextureRef.current.dispose()
+        videoTextureRef.current = null
+      }
+      if (bgMaterialRef.current) {
+        bgMaterialRef.current.dispose()
+        bgMaterialRef.current = null
+      }
+
       setIsRunning(false)
     }, [disposeMesh])
 
@@ -99,8 +120,101 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
 
         // CRITICAL: preserve WebGL buffer after each frame so captureFrame() can read it
         renderer.preserveDrawingBuffer = true
+        renderer.autoClear = false // Handle clear manually because we add a background pass
 
-        renderer.setAnimationLoop(() => renderer.render(scene, camera))
+        // --- Setup Warping Background Scene ---
+        bgSceneRef.current = new THREE.Scene()
+        bgCameraRef.current = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+        bgMaterialRef.current = new THREE.ShaderMaterial({
+          uniforms: THREE.UniformsUtils.clone(FaceWarpShader.uniforms),
+          vertexShader: FaceWarpShader.vertexShader,
+          fragmentShader: FaceWarpShader.fragmentShader,
+          transparent: true
+        })
+        const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMaterialRef.current)
+        bgSceneRef.current.add(bgMesh)
+
+        // Capture `<video>` to Three.VideoTexture
+        const video = containerRef.current?.querySelector('video')
+        if (video) {
+          videoTextureRef.current = new THREE.VideoTexture(video)
+          videoTextureRef.current.minFilter = THREE.LinearFilter
+          videoTextureRef.current.magFilter = THREE.LinearFilter
+          bgMaterialRef.current.uniforms.tDiffuse.value = videoTextureRef.current
+        }
+
+        // --- Custom Render Loop ---
+        renderer.setAnimationLoop(() => {
+          renderer.clear() // Clear screen
+          
+          if (distortionActiveRef.current && bgMaterialRef.current && videoTextureRef.current && video) {
+            const canvas = renderer.domElement
+            const uAspect = canvas.width / canvas.height
+            bgMaterialRef.current.uniforms.uAspect.value = uAspect
+
+            const videoAspect = video.videoWidth / video.videoHeight
+            const canvasAspect = canvas.width / canvas.height
+            let scaleX = 1, scaleY = 1
+            let offsetX = 0, offsetY = 0
+
+            // Apply Object-Fit: Cover parameters so WebGL draws exactly like the CSS video bounds
+            if (canvasAspect > videoAspect) {
+              scaleY = videoAspect / canvasAspect
+              offsetY = (1 - scaleY) / 2
+            } else {
+              scaleX = canvasAspect / videoAspect
+              offsetX = (1 - scaleX) / 2
+            }
+            bgMaterialRef.current.uniforms.uVideoScale.value.set(scaleX, scaleY)
+            bgMaterialRef.current.uniforms.uVideoOffset.value.set(offsetX, offsetY)
+
+            // Convert 3D anchors to 2D Screen UV Space [0..1]
+            const config = distortionParamsRef.current
+            const uniforms = bgMaterialRef.current.uniforms
+
+            const projectAnchor = (index: number) => {
+              const anchor = anchorsRef.current.get(index)
+              if (!anchor || !anchor.group.visible) return null
+              // Update 3D matrix in real-time
+              anchor.group.updateMatrixWorld(true)
+              const vec = new THREERef.current.Vector3().setFromMatrixPosition(anchor.group.matrixWorld)
+              vec.project(camera) // Projects vectors -> NDC Space X/Y ranges from -1 to 1.
+              // Restored to pure mapping. CSS Container handles the mirror flipping globally.
+              return { x: (vec.x + 1) / 2, y: (vec.y + 1) / 2 }
+            }
+
+            // Map standard MediaPipe indices to Shader uniform array.
+            // 386: User's physical Left Eye (appears Left in mirror). 159: User's physical Right Eye.
+            // 1: Nose, 152: Chin
+            const pts = [
+                { idx: 386, conf: config.leftEye },
+                { idx: 159, conf: config.rightEye },
+                { idx: 1,   conf: config.nose },
+                { idx: 152, conf: config.chin }
+            ]
+
+            for (let i = 0; i < 4; i++) {
+               const p = pts[i]
+               if (p.conf) {
+                  const pos = projectAnchor(p.idx)
+                  if (pos) {
+                    uniforms.uPoints.value[i].set(pos.x, pos.y)
+                    uniforms.uRadii.value[i] = p.conf.radius
+                    uniforms.uStrengths.value[i] = p.conf.strength
+                    continue
+                  }
+               }
+               uniforms.uRadii.value[i] = 0 // Hide distortion if tracking fails
+            }
+
+            // Render Distortion Pass
+            renderer.render(bgSceneRef.current, bgCameraRef.current)
+            renderer.clearDepth() // Clean depth to allow normal tracking elements on top
+          }
+
+          // Render Normal AR Pass
+          renderer.render(scene, camera)
+        })
         onReady?.()
       } catch (err: any) {
         console.error('AR start error:', err)
@@ -133,43 +247,45 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
     }, [])
 
     // ─── Face Mesh — paint texture onto face surface ───────────
-    const applyFaceMesh = useCallback((textureUrl: string) => {
+    const applyFaceMesh = useCallback(async (textureUrl: string): Promise<void> => {
       const THREE = THREERef.current
       if (!THREE || !mindarRef.current) return
 
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        // Create texture from image
-        const canvas = document.createElement('canvas')
-        canvas.width = 512
-        canvas.height = 512
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, 512, 512)
-        const texture = new THREE.CanvasTexture(canvas)
-        texture.needsUpdate = true
-        texture.colorSpace = THREE.SRGBColorSpace
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 512
+          canvas.height = 512
+          const ctx = canvas.getContext('2d')!
+          ctx.drawImage(img, 0, 0, 512, 512)
+          const texture = new THREE.CanvasTexture(canvas)
+          texture.needsUpdate = true
+          texture.colorSpace = THREE.SRGBColorSpace
 
-        if (faceMeshRef.current) {
-          // If face mesh already exists, just update its texture
-          faceMeshRef.current.material.map = texture
-          faceMeshRef.current.material.transparent = true
-          faceMeshRef.current.material.opacity = 0.75
-          faceMeshRef.current.material.needsUpdate = true
-        } else {
-          // Create new face mesh
-          const faceMesh = mindarRef.current.addFaceMesh()
-          faceMesh.material.map = texture
-          faceMesh.material.transparent = true
-          faceMesh.material.opacity = 0.75
-          faceMesh.material.needsUpdate = true
-          // CRITICAL: We must add the face mesh to the scene manually!
-          mindarRef.current.scene.add(faceMesh)
-          faceMeshRef.current = faceMesh
+          if (faceMeshRef.current) {
+            faceMeshRef.current.material.map = texture
+            faceMeshRef.current.material.transparent = true
+            faceMeshRef.current.material.opacity = 0.75
+            faceMeshRef.current.material.needsUpdate = true
+          } else {
+            const faceMesh = mindarRef.current.addFaceMesh()
+            faceMesh.material.map = texture
+            faceMesh.material.transparent = true
+            faceMesh.material.opacity = 0.75
+            faceMesh.material.needsUpdate = true
+            mindarRef.current.scene.add(faceMesh)
+            faceMeshRef.current = faceMesh
+          }
+          resolve()
         }
-      }
-      img.onerror = () => console.warn('Failed to load face mesh texture:', textureUrl)
-      img.src = textureUrl
+        img.onerror = () => {
+          console.warn('Failed to load face mesh texture:', textureUrl)
+          resolve()
+        }
+        img.src = textureUrl
+      })
     }, [])
 
     // ─── Remove face mesh texture ──────────────────────────────
@@ -341,47 +457,80 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
     useEffect(() => {
       if (!isRunning || !mindarRef.current) return
 
-      const currentIds = new Set(meshesRef.current.keys())
-      const targetIds = new Set(activeFilters.map(f => f.id))
-      const activeFaceMesh = activeFilters.find(f => f.type === 'facemesh')
-
-      // Remove deactivated overlay meshes
-      for (const id of currentIds) {
-        if (!targetIds.has(id)) {
-          disposeMesh(meshesRef.current.get(id))
-          meshesRef.current.delete(id)
+      const syncFilters = async () => {
+        const currentIds = new Set(meshesRef.current.keys())
+        const targetIds = new Set(activeFilters.map(f => f.id))
+        
+        let needsLoading = false
+        for (const target of targetIds) {
+          if (!currentIds.has(target)) needsLoading = true
         }
+        const activeFaceMesh = activeFilters.find(f => f.type === 'facemesh')
+        const currentFaceMeshId = faceMeshFilterIdRef.current
+        if (activeFaceMesh && currentFaceMeshId !== activeFaceMesh.id) needsLoading = true
+
+        if (needsLoading) onLoading?.(true)
+
+        // Remove deactivated overlay meshes
+        for (const id of currentIds) {
+          if (!targetIds.has(id)) {
+            disposeMesh(meshesRef.current.get(id))
+            meshesRef.current.delete(id)
+          }
+        }
+
+        const loadPromises: Promise<any>[] = []
+
+        if (activeFaceMesh && activeFaceMesh.textureUrl) {
+          if (currentFaceMeshId !== activeFaceMesh.id) {
+            faceMeshFilterIdRef.current = activeFaceMesh.id
+            loadPromises.push(applyFaceMesh(activeFaceMesh.textureUrl))
+          }
+        } else if (faceMeshRef.current) {
+          removeFaceMesh()
+        }
+
+        activeFilters.forEach((filter) => {
+          if (filter.type === 'facemesh' || filter.type === 'distortion') return
+          
+          if (!meshesRef.current.has(filter.id)) {
+            const createFn = filter.type === 'model' ? createModelMesh : createOverlayMesh
+            const p = createFn(filter).then((mesh) => {
+              if (mesh && mindarRef.current) {
+                const anchor = getAnchor(filter.anchorIndex || 1)
+                if (anchor) {
+                  if (!occluderMeshRef.current) setupOccluder()
+                  anchor.group.add(mesh)
+                  meshesRef.current.set(filter.id, mesh)
+                }
+              }
+            })
+            loadPromises.push(p)
+          }
+        })
+
+        await Promise.all(loadPromises)
+
+        // Handle Distortion Setup
+        const activeDistortion = activeFilters.find(f => f.type === 'distortion')
+        if (activeDistortion && activeDistortion.distortionConfig) {
+          distortionActiveRef.current = true
+          distortionParamsRef.current = activeDistortion.distortionConfig
+          // Khởi tạo Anchor Tracking
+          getAnchor(159); getAnchor(386); getAnchor(1); getAnchor(152);
+        } else {
+          distortionActiveRef.current = false
+          distortionParamsRef.current = { leftEye: null, rightEye: null, nose: null, chin: null }
+          if (bgMaterialRef.current) bgMaterialRef.current.uniforms.uRadii.value.fill(0)
+          const video = containerRef.current?.querySelector('video')
+          if (video) video.style.opacity = '1'
+        }
+
+        if (needsLoading) onLoading?.(false)
       }
 
-      // Handle face mesh — only one at a time
-      if (activeFaceMesh && activeFaceMesh.textureUrl) {
-        if (faceMeshFilterIdRef.current !== activeFaceMesh.id) {
-          faceMeshFilterIdRef.current = activeFaceMesh.id
-          applyFaceMesh(activeFaceMesh.textureUrl)
-        }
-      } else if (faceMeshRef.current) {
-        removeFaceMesh()
-      }
-
-      // Add new overlay meshes
-      for (const filter of activeFilters) {
-        if (filter.type === 'facemesh') continue
-        if (!meshesRef.current.has(filter.id) && filter.anchorIndex != null) {
-          const createFn = filter.type === 'model' ? createModelMesh : createOverlayMesh
-          createFn(filter).then(mesh => {
-            if (!mesh || !isRunning) return
-            const anchor = getAnchor(filter.anchorIndex!)
-            if (anchor) {
-              // Ensure occluder is ready before showing 3D objects
-              if (!occluderMeshRef.current) setupOccluder()
-              anchor.group.add(mesh)
-              meshesRef.current.set(filter.id, mesh)
-            }
-          })
-        }
-      }
-    }, [activeFilters, isRunning, createOverlayMesh, getAnchor, disposeMesh, applyFaceMesh, removeFaceMesh])
-
+      syncFilters()
+    }, [activeFilters, isRunning, createOverlayMesh, createModelMesh, getAnchor, disposeMesh, applyFaceMesh, removeFaceMesh, setupOccluder, onLoading])
     // ─── Lifecycle ─────────────────────────────────────────────
     useEffect(() => {
       startAR()
@@ -394,47 +543,62 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
       captureFrame: () => {
         if (!mindarRef.current?.renderer) return null
         const { renderer, scene, camera } = mindarRef.current
+        
+        // Force a synchronous render to guarantee WebGL buffer has the latest frame
+        // This is safe and ensures no black frames on capture
         renderer.render(scene, camera)
+        
         const glCanvas = renderer.domElement as HTMLCanvasElement
         const video = containerRef.current?.querySelector('video')
         if (!video) return null
 
-        // Output = đúng kích thước WebGL canvas (640x480 = AR tracker hệ tọa)
+        // Output = đúng kích thước WebGL canvas (640x480 = AR tracker hệ tọa độ)
         const output = document.createElement('canvas')
         output.width = glCanvas.width
         output.height = glCanvas.height
         const ctx = output.getContext('2d')!
 
-        // Cover-fit video vào output (màn AR đang crop video như này)
+        // Khớp kích thước background `<video>` (CSS object-fit: cover) với output canvas
         const scale = Math.max(output.width / video.videoWidth, output.height / video.videoHeight)
         const vw = video.videoWidth * scale
         const vh = video.videoHeight * scale
         const vx = (output.width - vw) / 2
         const vy = (output.height - vh) / 2
 
-        // Bước 1: Vẽ video VỚI FLIP ngang (vì video CSS có matrix(-1,0,0,1) = scaleX(-1))
-        // Dùng save/restore để transform chỉ ảnh hưởng video, không ảnh hưởng bước vẽ tiếp theo
         ctx.save()
-        ctx.translate(output.width, 0)
-        ctx.scale(-1, 1)
+        if (mirrored !== false) {
+          ctx.translate(output.width, 0)
+          ctx.scale(-1, 1) // Lật toàn bộ luồng video và mesh để khớp với những gì user thấy
+        }
+        
+        // 1. Vẽ thẻ Video thô làm nền
         ctx.drawImage(video, vx, vy, vw, vh)
-        ctx.restore()
-
-        // Bước 2: Phủ WebGL overlay (không canvas, không có CSS transform — pixel data ở space gốc)
-        // Lủc khanh đưa vào đúng tọa độ chẳn khính trên video đã flip
+        
+        // 2. Vẽ đè WebGL Canvas (Chứa Mask, Kính, 3D Object, và FaceMesh Distortion tàng hình)
         ctx.drawImage(glCanvas, 0, 0)
+        
+        ctx.restore()
 
         return output
       },
       stop: cleanup,
-    }), [cleanup])
+    }), [cleanup, mirrored])
 
     return (
       <>
-        {/* Hide MindAR's default loading overlay via global CSS override */}
-        <style>{`#mindar-ui-overlay, .mindar-ui-overlay { display: none !important; }`}</style>
+        {/* Hide MindAR's default loading overlay via global CSS override. 
+            Only force transform if mirrored is explicitly false, to avoid overwriting MindAR's translate(-50%, -50%) centering. */}
+        <style>{`
+          #mindar-ui-overlay, .mindar-ui-overlay { display: none !important; }
+          ${mirrored === false ? `
+            [data-ar-container="true"] video, [data-ar-container="true"] canvas {
+               transform: none !important;
+            }
+          ` : ''}
+        `}</style>
         <div
           ref={containerRef}
+          data-ar-container="true"
           className={`relative w-full overflow-hidden ${className}`}
           style={{ aspectRatio: '4/3' }}
         />
