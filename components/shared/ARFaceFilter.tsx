@@ -18,6 +18,20 @@ interface ARFaceFilterProps {
 
 // ─── CDN loader ──────────────────────────────────────────────
 
+// Suppress harmless TensorFlow / MediaPipe C++ logs that spawn red error overlays in Next.js dev mode
+if (typeof window !== 'undefined') {
+  const _error = console.error;
+  console.error = (...args) => {
+    if (typeof args[0] === 'string' && args[0].includes('XNNPACK')) return;
+    _error.apply(console, args);
+  };
+  const _warn = console.warn;
+  console.warn = (...args) => {
+    if (typeof args[0] === 'string' && args[0].includes('XNNPACK')) return;
+    _warn.apply(console, args);
+  };
+}
+
 let _cache: { MindARThree: any; THREE: any } | null = null
 
 async function loadMindAR(): Promise<{ MindARThree: any; THREE: any }> {
@@ -88,7 +102,17 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         mindarRef.current = mindarThree
 
         const { renderer, scene, camera } = mindarThree
-        scene.add(new THREE.AmbientLight(0xffffff, 1))
+        
+        // Comprehensive lighting for 3D GLTF models (PBR materials need directional specular)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
+        scene.add(ambientLight)
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
+        dirLight.position.set(0, 5, 5)
+        scene.add(dirLight)
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4)
+        scene.add(hemiLight)
 
         await mindarThree.start()
         setIsRunning(true)

@@ -4,7 +4,7 @@ import { useToast } from '@/components/ui/toast'
 
 export function useGifMaker() {
   const { toast } = useToast()
-  
+
   // Core Video State
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState<string>('')
@@ -77,7 +77,9 @@ export function useGifMaker() {
       if (data.url) {
         await handleFileUpload(data.url as unknown as File, true)
         if (data.mocked) {
-          toast("YouTube Localhost is blocked, so I'm loading a sample video from a simulator to test the UI!", 'info')
+          toast("YouTube Localhost is blocked!", 'info')
+        } else {
+          toast("Video loaded successfully!", 'success')
         }
       } else {
         throw new Error('No stream URL extracted.')

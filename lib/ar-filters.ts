@@ -103,17 +103,17 @@ export const AR_FILTERS: ARFilter[] = [
   },
 
   // === Accessories (overlay for now, upgrade to GLTF later) ===
-//   Bạn điền scale: 1.0 => Kính rộng chuẩn bằng 2 viền má.
-// Bạn điền scale: 1.1 => Kính to hơn mặt 10%.
-// Bạn điền scale: 0.9 => Kính nhỏ hơn mặt 10%.
+  //   Bạn điền scale: 1.0 => Kính rộng chuẩn bằng 2 viền má.
+  // Bạn điền scale: 1.1 => Kính to hơn mặt 10%.
+  // Bạn điền scale: 0.9 => Kính nhỏ hơn mặt 10%.
   {
     id: 'glasses-3d',
     label: '3D Glasses Pro',
     emoji: '🕶️',
     type: 'model',
     category: 'accessories',
-    modelUrl: '/ar-assets/cool-glasses.glb', 
-    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f576.svg', 
+    modelUrl: '/ar-assets/cool-glasses.glb',
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f576.svg',
     anchorIndex: 168,
     scale: 0.9, // Chỉnh nhỏ lại một chút cho vừa mắt
     offsetY: 0.0,
@@ -140,7 +140,7 @@ export const AR_FILTERS: ARFilter[] = [
     emoji: '🎩',
     type: 'model',
     category: 'accessories',
-     modelUrl: '/ar-assets/top-hat.glb',
+    modelUrl: '/ar-assets/top-hat.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f3a9.svg',
     scale: 1.7,           // Nhỏ lại
@@ -180,6 +180,20 @@ export const AR_FILTERS: ARFilter[] = [
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f338.svg',
     scale: 0.35,
     offsetY: -0.2,
+  },
+  {
+    id: 'trash-can',
+    label: 'Trash Can',
+    emoji: '🗑️',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Trashcan.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 1.5,           // Nhỏ lại
+    offsetY: 0.3,        // Số ÂM (-) để hạ xuống thấp hơn, số DƯƠNG (+) sẽ bay lên trời!
+    offsetZ: -0.7,        // Lùi lại gần đầu hơn
+    rotation: [0, 0, 0],
   },
 
   // === Fun (overlay) ===
