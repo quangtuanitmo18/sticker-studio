@@ -4,6 +4,7 @@ export interface TabItem<T extends string = string> {
   id: T
   label: string
   icon?: ReactNode
+  badge?: ReactNode
 }
 
 interface SidebarTabStripProps<T extends string> {
@@ -29,14 +30,14 @@ export function SidebarTabStrip<T extends string>({
   className,
 }: SidebarTabStripProps<T>) {
   return (
-    <div className={`flex gap-1 bg-(--card-bg) rounded-xl p-1 ${className ?? ''}`}>
+    <div className={`flex gap-1 bg-(--card-bg) rounded-xl p-1 overflow-x-auto ${className ?? ''}`}>
       {tabs.map(tab => {
         const isActive = tab.id === active
         return (
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+            className={`relative flex-1 flex items-center justify-center gap-1.5 py-2 px-3 whitespace-nowrap shrink-0 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
               isActive
                 ? 'text-[var(--accent)]'
                 : 'text-(--text-muted) hover:text-(--text-secondary)'
@@ -48,6 +49,11 @@ export function SidebarTabStrip<T extends string>({
           >
             {tab.icon}
             <span>{tab.label}</span>
+            {tab.badge && (
+              <div className="absolute -top-1 -right-1 z-10 pointer-events-none">
+                {tab.badge}
+              </div>
+            )}
           </button>
         )
       })}
