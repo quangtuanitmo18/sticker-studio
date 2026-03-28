@@ -565,20 +565,19 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         const vx = (output.width - vw) / 2
         const vy = (output.height - vh) / 2
 
+        // 1. Vẽ thẻ Video làm nền (có flip nếu đang bật gương)
         ctx.save()
         if (mirrored !== false) {
           ctx.translate(output.width, 0)
-          ctx.scale(-1, 1) // Lật toàn bộ luồng video và mesh để khớp với những gì user thấy
+          ctx.scale(-1, 1) // Chỉ lật ảnh thực tế nền từ camera
         }
-        
-        // 1. Vẽ thẻ Video thô làm nền
         ctx.drawImage(video, vx, vy, vw, vh)
+        ctx.restore() // Reset transform để khỏi ảnh hưởng WebGL canvas
         
-        // 2. Vẽ đè WebGL Canvas (Chứa Mask, Kính, 3D Object, và FaceMesh Distortion tàng hình)
+        // 2. Vẽ đè WebGL Canvas không bị lật
+        // Hệ tọa độ của WebGL/MindAR đã tự khớp màn hình rồi (không cần mirror 2D lần nữa)
         ctx.drawImage(glCanvas, 0, 0)
         
-        ctx.restore()
-
         return output
       },
       stop: cleanup,
