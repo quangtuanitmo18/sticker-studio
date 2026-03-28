@@ -138,8 +138,8 @@ export default function RootLayout({
           type="importmap"
           dangerouslySetInnerHTML={{ __html: JSON.stringify({
             imports: {
-              'three': 'https://unpkg.com/three@0.153.0/build/three.module.js',
-              'three/addons/': 'https://unpkg.com/three@0.153.0/examples/jsm/',
+              'three': 'https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js',
+              'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/',
               'mindar-face-three': 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-three.prod.js',
             }
           })}}
