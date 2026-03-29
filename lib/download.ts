@@ -9,8 +9,12 @@ export function downloadBlob(blob: Blob, filename: string) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => {
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, 150)
 }
 
 /** Download from a URL (data: or blob: or https:) */
