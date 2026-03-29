@@ -3,13 +3,14 @@
 import type { ExportFormat } from "@/components/shared/ExportFormatPanel";
 import {
   ExportFormatPanel,
+  exportCanvasAs,
 } from "@/components/shared/ExportFormatPanel";
 import { SidebarHeader } from "@/components/shared/SidebarHeader";
 import { SidebarTabStrip } from "@/components/shared/SidebarTabStrip";
 import { Loading } from "@/components/ui/Loading";
 import { useToast } from "@/components/ui/toast";
 import { useHistory } from "@/hooks/use-history";
-import { downloadUrl } from "@/lib/download";
+
 import {
   Check,
   CropIcon,
@@ -403,68 +404,10 @@ export default function PortraitMakerClient() {
       const h = img.naturalHeight * imgScale
       ctx.drawImage(img, imgPos.x, imgPos.y, w, h)
 
-      // MIME and quality config
-      const mimeMap = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' } as const
-      const qualityMap = { png: undefined, jpg: 0.92, webp: 0.90 } as const
-      const mime = mimeMap[exportFormat]
-      const quality = qualityMap[exportFormat]
-      const filename = `portrait_${selectedSize.id}.${exportFormat === 'jpg' ? 'jpg' : exportFormat}`
-
-      // For JPG: composite onto white background (no transparency)
-      let finalCanvas = exportCanvas
-      if (exportFormat === 'jpg') {
-        const tmpCanvas = document.createElement('canvas')
-        tmpCanvas.width = exportCanvas.width
-        tmpCanvas.height = exportCanvas.height
-        const tmpCtx = tmpCanvas.getContext('2d')!
-        tmpCtx.fillStyle = '#ffffff'
-        tmpCtx.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height)
-        tmpCtx.drawImage(exportCanvas, 0, 0)
-        finalCanvas = tmpCanvas
-      }
-
-      // Try File System Access API (native save dialog with correct filename)
-      if ('showSaveFilePicker' in window) {
-        try {
-          const extMap = { png: '.png', jpg: '.jpg', webp: '.webp' } as const
-          const handle = await (window as any).showSaveFilePicker({
-            suggestedName: filename,
-            types: [{
-              description: `${exportFormat.toUpperCase()} Image`,
-              accept: { [mime]: [extMap[exportFormat]] },
-            }],
-          })
-          const writable = await handle.createWritable()
-          const blob = await new Promise<Blob>((resolve) => {
-            finalCanvas.toBlob((b) => resolve(b!), mime, quality)
-          })
-          await writable.write(blob)
-          await writable.close()
-          toast('Portrait exported! 📸', 'success')
-          return
-        } catch (fsErr: any) {
-          if (fsErr.name === 'AbortError') { setIsExporting(false); return }
-          console.warn('File System API failed, falling back...', fsErr)
-        }
-      }
-
-      // Fallback: blob download with proper filename
-      finalCanvas.toBlob((blob) => {
-        if (!blob) { toast('Export failed', 'error'); return }
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.style.display = 'none'
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        setTimeout(() => {
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
-        }, 500)
-        toast('Portrait exported! 📸', 'success')
-      }, mime, quality)
-    } catch (err) {
+      await exportCanvasAs(exportCanvas, exportFormat, `portrait_${selectedSize.id}`)
+      toast('Portrait exported! 📸', 'success')
+    } catch (err: any) {
+      if (err.message === 'AbortError') return // Cancelled by user
       console.error('Export error:', err)
       toast('Export failed. Please try again.', 'error')
     } finally {

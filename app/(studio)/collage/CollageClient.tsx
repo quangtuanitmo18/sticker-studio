@@ -2,7 +2,7 @@
 
 import { AssetPanel } from '@/components/shared/AssetPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
-import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
+import { ExportFormatPanel, exportCanvasAs } from '@/components/shared/ExportFormatPanel'
 import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
 import { OverlayList } from '@/components/shared/OverlayList'
 import { SidebarHeader } from '@/components/shared/SidebarHeader'
@@ -11,7 +11,6 @@ import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { useHistory } from '@/hooks/use-history'
-import { downloadUrl } from '@/lib/download'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
 import { Download, Grid, GripVertical, Layers, Loader2, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, UploadCloud } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -370,8 +369,7 @@ export default function CollagePage() {
         }
       }
 
-      const dataUrl = canvasToExportDataUrl(canvas, exportFormat)
-      downloadUrl(dataUrl, `collage_${outputSize.id}.${exportFormat}`)
+      await exportCanvasAs(canvas, exportFormat, `collage_${outputSize.id}`)
       toast(`Collage exported as ${exportFormat.toUpperCase()}!`, 'success')
     } catch (err) {
       console.error('Export error:', err)
