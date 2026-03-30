@@ -2,7 +2,7 @@
 
 import { AssetPanel } from '@/components/shared/AssetPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
-import { ExportFormatPanel, canvasToExportDataUrl } from '@/components/shared/ExportFormatPanel'
+import { ExportFormatPanel, exportCanvasAs } from '@/components/shared/ExportFormatPanel'
 import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
 import { SidebarHeader } from '@/components/shared/SidebarHeader'
 import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
@@ -10,7 +10,6 @@ import { TextPanel } from '@/components/shared/TextPanel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { AR_CATEGORIES, AR_FILTERS, type ARFilter } from '@/lib/ar-filters'
-import { downloadUrl } from '@/lib/download'
 import { FILTER_CATEGORIES, IMAGE_FILTERS } from '@/lib/image-filters'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
 import {
@@ -484,10 +483,9 @@ export default function PhotoboothPage() {
       // Curtain reveal
       setShowCurtain(true)
       await new Promise(r => setTimeout(r, 1800))
-      const dataUrl = canvasToExportDataUrl(canvas, exportFormat)
       // Sanitize filename to ensure Windows correctly reads the extension
       const safeName = (activeCustomFrame ? activeCustomFrame.name : stripTemplate.id).replace(/[^a-zA-Z0-9_-]/g, '_')
-      downloadUrl(dataUrl, `photobooth_${safeName}.${exportFormat}`)
+      await exportCanvasAs(canvas, exportFormat, `photobooth_${safeName}`)
       toast(`🎉 Exported as ${exportFormat.toUpperCase()}!`, 'success')
       setTimeout(() => setShowCurtain(false), 500)
     } catch (err) { console.error(err); toast('Export failed', 'error'); setShowCurtain(false) }

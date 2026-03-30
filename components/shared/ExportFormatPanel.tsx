@@ -74,9 +74,22 @@ export function getExportMime(format: ExportFormat) {
   return { mime: mimeMap[format], quality: qualityMap[format], ext: format }
 }
 
-/** Helper: ensure JPG gets white background (no transparency) */
-export function canvasToExportDataUrl(canvas: HTMLCanvasElement, format: ExportFormat): string {
+/** 
+ * Robust canvas export function
+ * Uses File System Access API (showSaveFilePicker) when available for reliable filenames.
+ * Falls back to toBlob + anchor download.
+ * Automatically handles white background for JPG.
+ */
+export async function exportCanvasAs(
+  canvas: HTMLCanvasElement, 
+  format: ExportFormat, 
+  baseFilename: string
+): Promise<void> {
   const { mime, quality } = getExportMime(format)
+  const filename = `${baseFilename}.${format === 'jpg' ? 'jpg' : format}`
+
+  // For JPG, composite onto a white background (removes transparency)
+  let finalCanvas = canvas
   if (format === 'jpg') {
     const tmp = document.createElement('canvas')
     tmp.width = canvas.width; tmp.height = canvas.height
@@ -84,7 +97,49 @@ export function canvasToExportDataUrl(canvas: HTMLCanvasElement, format: ExportF
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, tmp.width, tmp.height)
     ctx.drawImage(canvas, 0, 0)
-    return tmp.toDataURL(mime, quality)
+    finalCanvas = tmp
   }
-  return canvas.toDataURL(mime, quality)
+
+  // Modern: File System Access API
+  if ('showSaveFilePicker' in window) {
+    try {
+      const extMap = { png: '.png', jpg: '.jpg', webp: '.webp' } as const
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: filename,
+        types: [{
+          description: `${format.toUpperCase()} Image`,
+          accept: { [mime]: [extMap[format]] },
+        }],
+      })
+      const writable = await handle.createWritable()
+      const blob = await new Promise<Blob>((resolve) => {
+        finalCanvas.toBlob((b) => resolve(b!), mime, quality)
+      })
+      await writable.write(blob)
+      await writable.close()
+      return
+    } catch (fsErr: any) {
+      if (fsErr.name === 'AbortError') throw new Error('AbortError') // Cancelled by user
+      console.warn('File System API failed, falling back...', fsErr)
+    }
+  }
+
+  // Fallback: Blob URL download
+  return new Promise((resolve, reject) => {
+    finalCanvas.toBlob((blob) => {
+      if (!blob) { reject(new Error('Canvas toBlob failed')); return }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => {
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        resolve()
+      }, 500)
+    }, mime, quality)
+  })
 }

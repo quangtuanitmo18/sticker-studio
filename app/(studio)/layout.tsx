@@ -1,7 +1,7 @@
 'use client'
 
 import { useTheme } from '@/hooks/use-theme'
-import { ArrowLeft, Camera, Grid, Package, Scissors, Sparkles, User, Film } from 'lucide-react'
+import { ArrowLeft, Camera, Grid, Package, Scissors, Sparkles, User, UserSquare2, Film } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -21,16 +21,18 @@ const NAV_GROUPS = [
       { href: '/avatar-creator', icon: User, label: '3D Avatar' },
       { href: '/collage', icon: Grid, label: 'Photo Collage' },
       { href: '/photobooth', icon: Camera, label: 'Photobooth' },
+      { href: '/portrait-maker', icon: UserSquare2, label: 'Portrait Maker' },
     ],
   },
 ]
 
-// Flat list for mobile bottom bar (top 5)
+// Flat list for mobile bottom bar (top 6)
 const MOBILE_NAV = [
   { href: '/maker', icon: Scissors, label: 'Maker' },
   { href: '/pack-gen', icon: Sparkles, label: 'AI Pack' },
   { href: '/collage', icon: Grid, label: 'Collage' },
   { href: '/photobooth', icon: Camera, label: 'Booth' },
+  { href: '/portrait-maker', icon: UserSquare2, label: 'Portrait' },
   { href: '/avatar-creator', icon: User, label: 'Avatar' },
 ]
 
