@@ -342,6 +342,21 @@ export const AR_FILTERS: ARFilter[] = [
     rotation: [0, 0, 0],
   },
 
+  {
+    id: 'dingus-the-cat',
+    label: 'Dingus The Cat',
+    emoji: '🐱',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Dingus the cat.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 0.8,
+    offsetY: 1,
+    offsetZ: -0.7,
+    rotation: [0, 0, 0],
+  },
+
   // === Fun (overlay) ===
   {
     id: 'clown',

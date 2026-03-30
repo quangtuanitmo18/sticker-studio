@@ -96,7 +96,7 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         disposeMesh(occluderMeshRef.current)
         occluderMeshRef.current = null
       }
-      
+
       // Cleanup WebGL textures
       if (videoTextureRef.current) {
         videoTextureRef.current.dispose()
@@ -123,11 +123,11 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         mindarRef.current = mindarThree
 
         const { renderer, scene, camera } = mindarThree
-        
+
         // Comprehensive lighting for 3D GLTF models (PBR materials need directional specular)
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
         scene.add(ambientLight)
-        
+
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
         dirLight.position.set(0, 5, 5)
         scene.add(dirLight)
@@ -170,7 +170,7 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         // --- Custom Render Loop ---
         renderer.setAnimationLoop(() => {
           renderer.clear() // Clear screen
-          
+
           if (distortionActiveRef.current && bgMaterialRef.current && videoTextureRef.current && video) {
             const canvas = renderer.domElement
             const uAspect = canvas.width / canvas.height
@@ -211,29 +211,35 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
             // 386: User's physical Left Eye (appears Left in mirror). 159: User's physical Right Eye.
             // 1: Nose, 152: Chin
             const pts = [
-                { idx: 386, conf: config.leftEye },
-                { idx: 159, conf: config.rightEye },
-                { idx: 1,   conf: config.nose },
-                { idx: 152, conf: config.chin }
+              { idx: 386, conf: config.leftEye },
+              { idx: 159, conf: config.rightEye },
+              { idx: 1, conf: config.nose },
+              { idx: 152, conf: config.chin }
             ]
 
             for (let i = 0; i < 4; i++) {
-               const p = pts[i]
-               if (p.conf) {
-                  const pos = projectAnchor(p.idx)
-                  if (pos) {
-                    uniforms.uPoints.value[i].set(pos.x, pos.y)
-                    uniforms.uRadii.value[i] = p.conf.radius
-                    uniforms.uStrengths.value[i] = p.conf.strength
-                    continue
-                  }
-               }
-               uniforms.uRadii.value[i] = 0 // Hide distortion if tracking fails
+              const p = pts[i]
+              if (p.conf) {
+                const pos = projectAnchor(p.idx)
+                if (pos) {
+                  uniforms.uPoints.value[i].set(pos.x, pos.y)
+                  uniforms.uRadii.value[i] = p.conf.radius
+                  uniforms.uStrengths.value[i] = p.conf.strength
+                  continue
+                }
+              }
+              uniforms.uRadii.value[i] = 0 // Hide distortion if tracking fails
             }
 
             // Render Distortion Pass
             renderer.render(bgSceneRef.current, bgCameraRef.current)
             renderer.clearDepth() // Clean depth to allow normal tracking elements on top
+          }
+
+          // Animate Dingus the Cat to spin continuously
+          const dingus = meshesRef.current.get('dingus-the-cat')
+          if (dingus) {
+            dingus.rotateY(-0.05)
           }
 
           // Render Normal AR Pass
@@ -373,20 +379,20 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
       const createFallbackGlasses = () => {
         const group = new THREE.Group()
         // Shiny dark plastic material
-        const material = new THREE.MeshPhysicalMaterial({ 
-          color: 0x111111, metalness: 0.9, roughness: 0.1, clearcoat: 1.0, transparent: true, opacity: 0.9 
+        const material = new THREE.MeshPhysicalMaterial({
+          color: 0x111111, metalness: 0.9, roughness: 0.1, clearcoat: 1.0, transparent: true, opacity: 0.9
         })
-        const glassMat = new THREE.MeshPhysicalMaterial({ 
-          color: 0x000000, metalness: 0.1, roughness: 0.1, transparent: true, opacity: 0.7 
+        const glassMat = new THREE.MeshPhysicalMaterial({
+          color: 0x000000, metalness: 0.1, roughness: 0.1, transparent: true, opacity: 0.7
         })
-        
+
         // Frames
         const frameGeo = new THREE.TorusGeometry(0.22, 0.04, 16, 100)
         const leftFrame = new THREE.Mesh(frameGeo, material)
         const rightFrame = new THREE.Mesh(frameGeo, material)
         leftFrame.position.set(-0.25, 0, 0)
         rightFrame.position.set(0.25, 0, 0)
-        
+
         // Lenses
         const lensGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.02, 32)
         lensGeo.rotateX(Math.PI / 2)
@@ -394,32 +400,32 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         const rightLens = new THREE.Mesh(lensGeo, glassMat)
         leftLens.position.set(-0.25, 0, 0)
         rightLens.position.set(0.25, 0, 0)
-        
+
         // Bridge
         const bridgeGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 8)
         bridgeGeo.rotateZ(Math.PI / 2)
         const bridge = new THREE.Mesh(bridgeGeo, material)
-        
+
         // Temples (gọng kính) - these extend back past the ears!
         // The Head Occluder will hide the back half of these so they don't render over the hair.
         const templeGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.2, 8)
         templeGeo.rotateX(Math.PI / 2)
-        
+
         const leftTemple = new THREE.Mesh(templeGeo, material)
         leftTemple.position.set(-0.47, 0, -0.6)
-        
+
         const rightTemple = new THREE.Mesh(templeGeo, material)
         rightTemple.position.set(0.47, 0, -0.6)
 
         group.add(leftFrame, rightFrame, leftLens, rightLens, bridge, leftTemple, rightTemple)
-        
+
         // The fallback glasses are visually large relative to the 1.0 unit scale.
         // We multiply by a smaller factor so they fit the face (width ~0.15m) normally.
         const s = filter.scale * 0.05
         group.scale.set(s, s, s)
         if (filter.offsetY) group.position.y = filter.offsetY
         if (filter.rotation) group.rotation.set(...filter.rotation)
-        
+
         return group
       }
 
@@ -431,31 +437,31 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
         try {
           const { GLTFLoader } = await import(/* webpackIgnore: true */ 'three/addons/loaders/GLTFLoader.js')
           const loader = new GLTFLoader()
-          
+
           const url = filter.modelUrl!
           loader.load(
             url,
             (gltf: any) => {
               const model = gltf.scene || gltf.scenes[0]
-              
+
               // Tự động tính toán Bounding Box
               const box = new THREE.Box3().setFromObject(model)
               const size = box.getSize(new THREE.Vector3())
               const center = box.getCenter(new THREE.Vector3())
-              
+
               // Đưa tâm hình học (geometric center) của kính về ngay vị trí (0,0,0) của anchor!
               // Giúp kính tự động căn vào giữa sống mũi thay vì bay tít lên trán.
               model.position.set(-center.x, -center.y, -center.z)
-              
+
               // Nhóm lại để scale tổng thể mà không làm hỏng tọa độ position vừa set
               const group = new THREE.Group()
               group.add(model)
-              
+
               // Chuẩn hóa chiều rộng về 1.0, sau đó nhân với filter.scale
               const baseScale = size.x > 0 ? 1.0 / size.x : 1.0
               const finalScale = baseScale * filter.scale
               group.scale.set(finalScale, finalScale, finalScale)
-              
+
               // Dịch y, z thêm tùy chọn nếu muốn
               if (filter.offsetY) group.position.y = filter.offsetY
               if (filter.offsetZ) group.position.z = filter.offsetZ
@@ -484,7 +490,7 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
       const syncFilters = async () => {
         const currentIds = new Set(meshesRef.current.keys())
         const targetIds = new Set(activeFilters.map(f => f.id))
-        
+
         let needsLoading = false
         for (const target of targetIds) {
           if (!currentIds.has(target)) needsLoading = true
@@ -516,7 +522,7 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
 
         activeFilters.forEach((filter) => {
           if (filter.type === 'facemesh' || filter.type === 'distortion') return
-          
+
           if (!meshesRef.current.has(filter.id)) {
             const createFn = filter.type === 'model' ? createModelMesh : createOverlayMesh
             const p = createFn(filter).then((mesh) => {
@@ -559,7 +565,7 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
     useEffect(() => {
       startAR()
       return cleanup
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // ─── Imperative handle ─────────────────────────────────────
@@ -567,11 +573,11 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
       captureFrame: () => {
         if (!mindarRef.current?.renderer) return null
         const { renderer, scene, camera } = mindarRef.current
-        
+
         // Force a synchronous render to guarantee WebGL buffer has the latest frame
         // This is safe and ensures no black frames on capture
         renderer.render(scene, camera)
-        
+
         const glCanvas = renderer.domElement as HTMLCanvasElement
         const video = containerRef.current?.querySelector('video')
         if (!video) return null
@@ -594,13 +600,13 @@ const ARFaceFilter = forwardRef<ARFaceFilterHandle, ARFaceFilterProps>(
           ctx.translate(output.width, 0)
           ctx.scale(-1, 1) // Lật toàn bộ luồng video và mesh để khớp với những gì user thấy
         }
-        
+
         // 1. Vẽ thẻ Video thô làm nền
         ctx.drawImage(video, vx, vy, vw, vh)
-        
+
         // 2. Vẽ đè WebGL Canvas (Chứa Mask, Kính, 3D Object, và FaceMesh Distortion tàng hình)
         ctx.drawImage(glCanvas, 0, 0)
-        
+
         ctx.restore()
 
         return output
