@@ -261,9 +261,9 @@ export const AR_FILTERS: ARFilter[] = [
     modelUrl: '/ar-assets/Pizza Hat.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
-    scale: 1.5,
-    offsetY: 0.05,
-    offsetZ: -0.7,
+    scale: 0.8,
+    offsetY: -1,
+    offsetZ: -0.9,
     rotation: [0, -Math.PI / 2, 0],
   },
 
@@ -339,21 +339,6 @@ export const AR_FILTERS: ARFilter[] = [
     scale: 2.2,
     offsetY: 0.65,
     offsetZ: -0.7,
-    rotation: [0, 0, 0],
-  },
-
-  {
-    id: 'toilet-paper',
-    label: 'Skibidi Toilet',
-    emoji: '🚽',
-    type: 'model',
-    category: 'accessories',
-    modelUrl: '/ar-assets/Toilet.glb',
-    anchorIndex: 168,
-    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
-    scale: 6.5,           // Phóng siêu to để bao bọc kín cổ và vai
-    offsetY: -3.8,        // Đẩy sâu xuống ngực
-    offsetZ: -1.5,        // Đẩy ra sau để mặt nạ tàng hình khoét lỗ xuyên qua nắp!
     rotation: [0, 0, 0],
   },
 
