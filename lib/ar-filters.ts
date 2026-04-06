@@ -150,17 +150,17 @@ export const AR_FILTERS: ARFilter[] = [
   },
 
   // === Accessories (overlay for now, upgrade to GLTF later) ===
-//   Bạn điền scale: 1.0 => Kính rộng chuẩn bằng 2 viền má.
-// Bạn điền scale: 1.1 => Kính to hơn mặt 10%.
-// Bạn điền scale: 0.9 => Kính nhỏ hơn mặt 10%.
+  //   Bạn điền scale: 1.0 => Kính rộng chuẩn bằng 2 viền má.
+  // Bạn điền scale: 1.1 => Kính to hơn mặt 10%.
+  // Bạn điền scale: 0.9 => Kính nhỏ hơn mặt 10%.
   {
     id: 'glasses-3d',
-    label: '3D Glasses Pro',
+    label: 'Glasses',
     emoji: '🕶️',
     type: 'model',
     category: 'accessories',
-    modelUrl: '/ar-assets/cool-glasses.glb', 
-    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f576.svg', 
+    modelUrl: '/ar-assets/cool-glasses.glb',
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f576.svg',
     anchorIndex: 168,
     scale: 0.9, // Chỉnh nhỏ lại một chút cho vừa mắt
     offsetY: 0.0,
@@ -169,7 +169,7 @@ export const AR_FILTERS: ARFilter[] = [
   },
   {
     id: 'crown-3d',
-    label: '3D Crown',
+    label: 'Crown',
     emoji: '👑',
     type: 'model',
     category: 'accessories',
@@ -201,11 +201,11 @@ export const AR_FILTERS: ARFilter[] = [
     emoji: '🧢',
     type: 'model',
     category: 'accessories',
-    modelUrl: '/ar-assets/baseball-cap.glb', 
+    modelUrl: '/ar-assets/baseball-cap.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9e2.svg',
-    scale: 1.7,           // Nhỏ lại
-    offsetY: 1,         // Hạ xuống thấp hơn
+    scale: 1.75,           // Nhỏ lại
+    offsetY: 0.6,         // Hạ xuống thấp hơn
     offsetZ: -0.7,        // Lùi lại gần đầu hơn
     rotation: [0, 0, 0],
   },
@@ -215,11 +215,11 @@ export const AR_FILTERS: ARFilter[] = [
     emoji: '🎓',
     type: 'model',
     category: 'accessories',
-    modelUrl: '/ar-assets/graduation-cap.glb', 
+    modelUrl: '/ar-assets/graduation-cap.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f393.svg',
     scale: 1.7,           // Nhỏ lại
-    offsetY: 1,         // Hạ xuống thấp hơn
+    offsetY: 0.5,         // Hạ xuống thấp hơn
     offsetZ: -0.7,        // Lùi lại gần đầu hơn
     rotation: [0, 0, 0],
   },
@@ -229,27 +229,132 @@ export const AR_FILTERS: ARFilter[] = [
     emoji: '🧙',
     type: 'model',
     category: 'accessories',
-    modelUrl: '/ar-assets/wizard-hat.glb', 
+    modelUrl: '/ar-assets/wizard-hat.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f9d9.svg',
-    scale: 1.7,           // Nhỏ lại
+    scale: 2.0,           // Nhỏ lại
     offsetY: 1,         // Hạ xuống thấp hơn
     offsetZ: -0.7,        // Lùi lại gần đầu hơn
     rotation: [0, 0, 0],
   },
-  {  
+  {
     id: 'security-hat',
     label: 'Security Hat',
     emoji: '👮',
     type: 'model',
     category: 'accessories',
-    modelUrl: '/ar-assets/security-hat.glb', 
+    modelUrl: '/ar-assets/security-hat.glb',
     anchorIndex: 168,
     imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f46e.svg',
-    scale: 1.4,           // Đã thu nhỏ lại một chút cho vừa đầu
-    offsetY: 0.7,         // Hạ thấp xuống để ôm sát đầu hơn (trước là 1)
+    scale: 1.6,           // Đã thu nhỏ lại một chút cho vừa đầu
+    offsetY: 0.65,         // Hạ thấp xuống để ôm sát đầu hơn (trước là 1)
     offsetZ: -0.7,        // Lùi lại gần đầu hơn
-    rotation: [0, 0, 0], // Xoay ngang 90 độ (trục Y)
+    rotation: [0, -Math.PI / 2, 0], // Xoay ngang 90 độ (trục Y)
+  },
+
+  {
+    id: 'pizza-hat',
+    label: 'Pizza Hat',
+    emoji: '🍕',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Pizza Hat.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 0.8,
+    offsetY: -1,
+    offsetZ: -0.9,
+    rotation: [0, -Math.PI / 2, 0],
+  },
+
+  {
+    id: 'cat-beanie',
+    label: 'Cat Beanie',
+    emoji: '🐱',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Cat Beanie.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 1.4,
+    offsetY: 0.65,
+    offsetZ: -0.7,
+    rotation: [0, -Math.PI / 2, 0], // Xoay 90 độ vì ban đầu quay sang phải
+  },
+
+  {
+    id: 'frog-hat',
+    label: 'Frog Hat',
+    emoji: '🐸',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Frog Hat.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 1.5,
+    offsetY: 0.65,
+    offsetZ: -0.7,
+    rotation: [0, Math.PI / 2, 0],
+  },
+
+  {
+    id: 'trash-can',
+    label: 'Trash Can',
+    emoji: '🗑️',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Trashcan.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 1.5,
+    offsetY: 0.1,
+    offsetZ: -0.7,
+    rotation: [0, 0, 0],
+  },
+
+  {
+    id: 'pixel-glasses',
+    label: 'Pixel Glasses',
+    emoji: '️🕶️',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Pixel Glasses.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f576.svg',
+    scale: 1.2,
+    offsetY: 0,
+    offsetZ: -0.7,
+    rotation: [0, 0, 0],
+  },
+
+  {
+    id: 'sheriff-hat',
+    label: 'Sheriff Hat',
+    emoji: '🤠',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Sheriff Hat.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 2.2,
+    offsetY: 0.65,
+    offsetZ: -0.7,
+    rotation: [0, 0, 0],
+  },
+
+  {
+    id: 'dingus-the-cat',
+    label: 'Dingus The Cat',
+    emoji: '🐱',
+    type: 'model',
+    category: 'accessories',
+    modelUrl: '/ar-assets/Dingus the cat.glb',
+    anchorIndex: 168,
+    imageUrl: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f5d1.svg',
+    scale: 0.8,
+    offsetY: 1,
+    offsetZ: -0.7,
+    rotation: [0, 0, 0],
   },
 
   // === Fun (overlay) ===

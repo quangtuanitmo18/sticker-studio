@@ -10,25 +10,40 @@ export async function POST(req: Request) {
     }
 
     try {
+      let resolvedUrl = null;
+
+      // 1. Try distube/ytdl-core for YouTube links first (often faster if not bot-blocked)
       if (ytdl.validateURL(url)) {
-        // Handle YouTube via @distube/ytdl-core because it handles bot protections natively much better than yt-dlp currently does
-        const info = await ytdl.getInfo(url)
-        const format = ytdl.chooseFormat(info.formats, { quality: 'highestvideo', filter: 'videoandaudio' }) || ytdl.chooseFormat(info.formats, { quality: 'highest' })
-        
-        if (format && format.url) {
-          return NextResponse.json({ url: format.url })
+        try {
+          const info = await ytdl.getInfo(url)
+          const format = ytdl.chooseFormat(info.formats, { quality: 'highestvideo', filter: 'videoandaudio' }) || ytdl.chooseFormat(info.formats, { quality: 'highest' })
+          
+          if (format && format.url) {
+            resolvedUrl = format.url
+          }
+        } catch (ytErr: any) {
+          console.warn('ytdl-core failed, falling back to youtube-dl-exec:', ytErr.message)
+          // Do not throw, allow fallback to youtube-dl-exec (yt-dlp)
         }
       }
 
-      // Handle non-YT or fallback via yt-dlp
-      const output: any = await youtubedl(url, {
-        dumpSingleJson: true,
-        noWarnings: true,
-        preferFreeFormats: true,
-        format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-      })
-      if (output && output.url) {
-        return NextResponse.json({ url: output.url })
+      // 2. Fallback or Non-YT URLs -> Use youtube-dl-exec (Powered by yt-dlp)
+      // This supports Facebook, Instagram, TikTok, and YouTube bot-bypassing
+      if (!resolvedUrl) {
+        console.log('Fetching with youtube-dl-exec (yt-dlp):', url)
+        const output: any = await youtubedl(url, {
+          dumpSingleJson: true,
+          noWarnings: true,
+          preferFreeFormats: true,
+          format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        })
+        if (output && output.url) {
+          resolvedUrl = output.url
+        }
+      }
+
+      if (resolvedUrl) {
+        return NextResponse.json({ url: resolvedUrl })
       }
       return NextResponse.json({ error: 'Failed to find direct stream URL.' }, { status: 500 })
     } catch (err: any) {
