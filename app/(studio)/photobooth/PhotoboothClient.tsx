@@ -135,6 +135,7 @@ export default function PhotoboothPage() {
   const [arFilterCategory, setArFilterCategory] = useState<string>('facepaint')
   const [arLoading, setArLoading] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
+  const [isSwitchingFrame, setIsSwitchingFrame] = useState(false)
   const [switchToBg, setSwitchToBg] = useState<string | null>(null)
   const arRef = useRef<import('@/components/shared/ARFaceFilter').ARFaceFilterHandle>(null)
 
@@ -183,28 +184,89 @@ export default function PhotoboothPage() {
     setCustomFrames(localFrames)
 
     // Cloud frames
-    fetch('/api/frames')
+    fetch(`/api/frames?t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
-        if (data.frames && data.frames.length > 0) {
-          const cloudFrames: FrameTemplate[] = data.frames.map((f: any) => ({
-            id: f.id,
-            name: f.name,
-            width: f.width,
-            height: f.height,
-            slots: f.slots,
-            frameDataUrl: f.frameUrl || '',
-            createdAt: f.createdAt,
-            isCloud: true,
-          }))
-          // Merge: local first, then cloud (skip duplicates by name)
-          const localNames = new Set(localFrames.map(f => f.name))
-          const merged = [...localFrames, ...cloudFrames.filter(f => !localNames.has(f.name))]
-          setCustomFrames(merged)
+        const cloudFrames: FrameTemplate[] = (data.frames || []).map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          width: f.width,
+          height: f.height,
+          slots: f.slots,
+          frameDataUrl: f.frameUrl || '',
+          createdAt: f.createdAt,
+          isCloud: true,
+          _bucketPath: f._bucketPath || `frames/${f.id}`
+        }))
+        // Merge: cloud wins when IDs overlap (cloud is source of truth after save-to-cloud)
+        const cloudMap = new Map(cloudFrames.map(f => [f.id, f]))
+        const localOnlyFrames = localFrames.filter(f => !cloudMap.has(f.id))
+        const merged = [...localOnlyFrames, ...cloudFrames]
+        setCustomFrames(merged)
+        
+        // Auto select if redirected from Frame Editor
+        const autoSelectId = localStorage.getItem('sticker-studio-auto-select-frame')
+        if (autoSelectId) {
+          const frameToSelect = merged.find(f => f.id === autoSelectId)
+          if (frameToSelect) {
+            handleFrameSwitch(frameToSelect)
+            setSideTab('frames')
+            localStorage.removeItem('sticker-studio-auto-select-frame')
+          }
         }
       })
-      .catch(err => console.warn('Failed to load cloud frames:', err))
+      .catch(err => {
+        console.warn('Failed to load cloud frames:', err)
+        // If cloud fails, still process local and auto-select
+        setCustomFrames(localFrames)
+        const autoSelectId = localStorage.getItem('sticker-studio-auto-select-frame')
+        if (autoSelectId) {
+          const frameToSelect = localFrames.find(f => f.id === autoSelectId)
+          if (frameToSelect) {
+            handleFrameSwitch(frameToSelect)
+            setSideTab('frames')
+            localStorage.removeItem('sticker-studio-auto-select-frame')
+          }
+        }
+      })
   }, [])
+
+  // ─── Delete Custom Frame ─────────────────────────────────────
+  const handleDeleteFrame = async (f: FrameTemplate, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm(`Are you sure you want to delete "${f.name}"?`)) return
+    
+    // If cloud frame, try cloud delete FIRST before touching local state
+    if ((f as any).isCloud) {
+      try {
+        const pathParam = f._bucketPath || `frames/${f.id}`
+        const res = await fetch(`/api/frames?path=${pathParam}`, { method: 'DELETE' })
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to delete from cloud')
+        }
+      } catch (err: any) {
+        console.error('Delete cloud frame error:', err)
+        toast(`Cloud delete failed: ${err.message}`, 'error')
+        return // Don't remove from local UI — it would reappear on reload anyway
+      }
+    }
+    
+    // Remove from localStorage
+    try {
+      const stored: FrameTemplate[] = JSON.parse(localStorage.getItem('sticker-studio-frame-templates') || '[]')
+      localStorage.setItem('sticker-studio-frame-templates', JSON.stringify(stored.filter(frame => frame.id !== f.id)))
+    } catch {}
+    
+    // Remove from UI state
+    setCustomFrames(prev => prev.filter(frame => frame.id !== f.id))
+    if (activeCustomFrame?.id === f.id) {
+      setActiveCustomFrame(null)
+      setStripTemplate(STRIP_TEMPLATES[0])
+    }
+    
+    toast(`Frame "${f.name}" deleted`, 'success')
+  }
 
   // ─── Capture ───────────────────────────────────────────────
   const capturePhoto = useCallback(() => {
@@ -390,8 +452,15 @@ export default function PhotoboothPage() {
     const idx = draggingSlot
     const startRef = slotDragStart.current
     const r = previewRef.current.getBoundingClientRect()
-    const dx = ((e.clientX - startRef.x) / r.width) * 100
-    const dy = ((e.clientY - startRef.y) / r.height) * 100
+    const rawDx = ((e.clientX - startRef.x) / r.width) * 100
+    const rawDy = ((e.clientY - startRef.y) / r.height) * 100
+    
+    // Reverse the visual rotation for dragging behavior
+    const slot = activeCustomFrame!.slots[idx]
+    const rAngle = (slot.rotation || 0) * Math.PI / 180
+    const dx = rawDx * Math.cos(-rAngle) - rawDy * Math.sin(-rAngle)
+    const dy = rawDx * Math.sin(-rAngle) + rawDy * Math.cos(-rAngle)
+
     const startOx = startRef.ox, startOy = startRef.oy
     setSlotOffsets(prev => {
       const cur = prev[idx] || { ox: 0, oy: 0, scale: 1 }
@@ -430,11 +499,20 @@ export default function PhotoboothPage() {
           const photo = capturedPhotos[i]
           const off = getSlotOffset(i)
           ctx.save()
-          if (slot.radius > 0) {
-            ctx.beginPath()
-            ctx.roundRect(slot.x, slot.y, slot.w, slot.h, slot.radius)
-            ctx.clip()
+          if (slot.rotation) {
+            const cx = slot.x + slot.w / 2
+            const cy = slot.y + slot.h / 2
+            ctx.translate(cx, cy)
+            ctx.rotate((slot.rotation * Math.PI) / 180)
+            ctx.translate(-cx, -cy)
           }
+          ctx.beginPath()
+          if (slot.radius > 0) {
+            ctx.roundRect(slot.x, slot.y, slot.w, slot.h, slot.radius)
+          } else {
+            ctx.rect(slot.x, slot.y, slot.w, slot.h)
+          }
+          ctx.clip()
           // Cover crop with user offset + scale
           const baseScale = Math.max(slot.w / photo.width, slot.h / photo.height) * off.scale
           const dw = photo.width * baseScale, dh = photo.height * baseScale
@@ -443,27 +521,12 @@ export default function PhotoboothPage() {
           ctx.drawImage(photo, 0, 0, photo.width, photo.height, dx, dy, dw, dh)
           ctx.restore()
         }
-        // Overlay frame PNG with slot areas punched out
+        // Overlay frame PNG exactly as it is
         if (activeCustomFrame.frameDataUrl) {
           const frameImg = await loadImage(activeCustomFrame.frameDataUrl)
-          // Create temp canvas for frame with slot areas removed
-          const frameCanvas = document.createElement('canvas')
-          frameCanvas.width = W; frameCanvas.height = H
-          const fctx = frameCanvas.getContext('2d')!
-          fctx.drawImage(frameImg, 0, 0, W, H)
-          // Punch out slot areas
-          fctx.globalCompositeOperation = 'destination-out'
-          for (const slot of activeCustomFrame.slots) {
-            fctx.beginPath()
-            if (slot.radius > 0) {
-              fctx.roundRect(slot.x, slot.y, slot.w, slot.h, slot.radius)
-            } else {
-              fctx.rect(slot.x, slot.y, slot.w, slot.h)
-            }
-            fctx.fill()
-          }
-          ctx.drawImage(frameCanvas, 0, 0)
+          ctx.drawImage(frameImg, 0, 0, W, H)
         }
+
       } else {
         // Standard strip export
         const W = 600, H = stripTemplate.id === 'polaroid' ? 720 : stripTemplate.id === 'grid2x2' ? 600 : 1600
@@ -539,6 +602,23 @@ export default function PhotoboothPage() {
   useEffect(() => {
     if (arEnabled && activeARFilters.length === 0) disableAR()
   }, [arEnabled, activeARFilters.length, disableAR])
+
+  const handleFrameSwitch = useCallback((customFrame: FrameTemplate | null, stripTemplateTarget: StripTemplate | null = null) => {
+    setIsSwitchingFrame(true)
+    // Wait for UI to render the loading state
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (customFrame) {
+          setActiveCustomFrame(customFrame)
+        } else if (stripTemplateTarget) {
+          setActiveCustomFrame(null)
+          setStripTemplate(stripTemplateTarget)
+        }
+        // Give time for image to load or canvas to mount before hiding loader
+        setTimeout(() => setIsSwitchingFrame(false), 200) 
+      }, 30)
+    })
+  }, [])
 
   const SIDE = [
     { id: 'capture' as SideTab, label: 'Capture', icon: <Camera className="w-3.5 h-3.5" /> },
@@ -663,7 +743,7 @@ export default function PhotoboothPage() {
           {/* Built-in Presets */}
           <Sec title="📦 Built-in Presets">
             <div className="grid grid-cols-3 gap-1.5">{STRIP_TEMPLATES.map(t => (
-              <button key={t.id} onClick={() => { setActiveCustomFrame(null); setStripTemplate(t) }}
+              <button key={t.id} onClick={() => handleFrameSwitch(null, t)}
                 className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${!activeCustomFrame && stripTemplate.id === t.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}>
                 <span className="text-sm block">{t.emoji}</span>
                 <span className="text-[9px]">{t.label}</span>
@@ -691,21 +771,30 @@ export default function PhotoboothPage() {
               <div className="grid grid-cols-2 gap-1.5">{customFrames.map(f => (
                 <div key={f.id}
                   className={`relative group py-2.5 px-2 rounded-lg text-left transition-all cursor-pointer ${activeCustomFrame?.id === f.id ? 'bg-[#FF6B4A]/15 border border-[#FF6B4A]/20' : 'bg-(--card-bg) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
-                  onClick={() => setActiveCustomFrame(f)}>
+                  onClick={() => handleFrameSwitch(f)}>
                   <div className="flex items-center gap-1.5">
                     {(f as any).isCloud && <span className="text-[10px]">☁️</span>}
                     <Frame className="w-3.5 h-3.5 text-(--text-muted) shrink-0" />
                     <span className="text-[10px] font-semibold text-(--text-secondary) truncate">{f.name}</span>
                   </div>
                   <span className="text-[9px] text-(--text-muted)">{f.slots.length} slots</span>
-                  {/* Edit button */}
-                  <button
-                    onClick={e => { e.stopPropagation(); setEditingFrame(f); setShowFrameEditor(true) }}
-                    className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-white/10 cursor-pointer"
-                    title="Edit frame"
-                  >
-                    <Pencil className="w-3 h-3 text-(--text-muted) hover:text-[#FF6B4A]" />
-                  </button>
+                  {/* Actions (Edit / Delete) */}
+                  <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditingFrame(f); setShowFrameEditor(true) }}
+                      className="p-1 rounded hover:bg-white/10 cursor-pointer"
+                      title="Edit frame"
+                    >
+                      <Pencil className="w-3 h-3 text-(--text-muted) hover:text-[#FF6B4A]" />
+                    </button>
+                    <button
+                      onClick={e => handleDeleteFrame(f, e)}
+                      className="p-1 rounded hover:bg-red-500/10 cursor-pointer"
+                      title="Delete frame"
+                    >
+                      <Trash2 className="w-3 h-3 text-(--text-muted) hover:text-red-400" />
+                    </button>
+                  </div>
                 </div>
               ))}</div>
             ) : (
@@ -940,13 +1029,22 @@ export default function PhotoboothPage() {
               <div ref={previewRef}
                 className="relative rounded-2xl shadow-2xl w-full"
                 style={{
-                  maxWidth: activeCustomFrame ? '360px' : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid' ? '300px' : '240px',
+                  maxWidth: activeCustomFrame 
+                    ? (activeCustomFrame.width > activeCustomFrame.height ? '640px' : '360px') 
+                    : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid' ? '300px' : '240px',
                   ...(activeCustomFrame ? {} : { aspectRatio: stripTemplate.id === 'polaroid' ? '5/6' : stripTemplate.id === 'grid2x2' ? '1/1' : '3/8' })
                 }}
                 onPointerDown={() => setActiveSlot(null)}
                 onPointerMove={e => { onSlotMove(e) }}
                 onPointerUp={() => { onSlotUp() }}
               >
+                {/* ── Loading Spinner for Frame Switch ── */}
+                {isSwitchingFrame && (
+                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-2xl">
+                    <Loader2 className="w-10 h-10 text-[#FF6B4A] animate-spin drop-shadow-xl" />
+                  </div>
+                )}
+                
                 {activeCustomFrame ? (
                   <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} />
                 ) : (
@@ -978,6 +1076,7 @@ export default function PhotoboothPage() {
                         width: `${(slot.w / activeCustomFrame.width) * 100}%`,
                         height: `${(slot.h / activeCustomFrame.height) * 100}%`,
                         borderRadius: slot.radius > 0 ? `${(slot.radius / Math.min(slot.w, slot.h)) * 50}%` : undefined,
+                        transform: slot.rotation ? `rotate(${slot.rotation}deg)` : undefined,
                         zIndex: activeSlot === i ? 30 : 20,
                       }}
                       title={`Drag to reposition photo ${i + 1}`}
@@ -1051,7 +1150,7 @@ export default function PhotoboothPage() {
                 let localFrames: FrameTemplate[] = []
                 try { localFrames = JSON.parse(localStorage.getItem('sticker-studio-frame-templates') || '[]') } catch {}
                 setCustomFrames(localFrames)
-                setActiveCustomFrame(frame)
+                handleFrameSwitch(frame)
                 setEditingFrame(null)
                 setShowFrameEditor(false)
                 setSideTab('frames')
@@ -1059,8 +1158,8 @@ export default function PhotoboothPage() {
                 fetch('/api/frames').then(r => r.json()).then(data => {
                   if (data.frames?.length) {
                     const cloudFrames = data.frames.map((f: any) => ({ id: f.id, name: f.name, width: f.width, height: f.height, slots: f.slots, frameDataUrl: f.frameUrl || '', createdAt: f.createdAt, isCloud: true }))
-                    const localNames = new Set(localFrames.map((f: FrameTemplate) => f.name))
-                    setCustomFrames([...localFrames, ...cloudFrames.filter((f: FrameTemplate) => !localNames.has(f.name))])
+                    const localIds = new Set(localFrames.map((f: FrameTemplate) => f.id))
+                    setCustomFrames([...localFrames, ...cloudFrames.filter((f: FrameTemplate) => !localIds.has(f.id))])
                   }
                 }).catch(() => {})
               }}
@@ -1162,16 +1261,25 @@ function FramePreviewCanvas({ frame, photos, slotOffsets }: {
     const W = frame.width, H = frame.height
     canvas.width = W; canvas.height = H
 
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, W, H)
+    ctx.clearRect(0, 0, W, H)
 
     frame.slots.forEach((slot, i) => {
       ctx.save()
-      if (slot.radius > 0) {
-        ctx.beginPath()
-        ctx.roundRect(slot.x, slot.y, slot.w, slot.h, slot.radius)
-        ctx.clip()
+      if (slot.rotation) {
+        const cx = slot.x + slot.w / 2
+        const cy = slot.y + slot.h / 2
+        ctx.translate(cx, cy)
+        ctx.rotate((slot.rotation * Math.PI) / 180)
+        ctx.translate(-cx, -cy)
       }
+      ctx.beginPath()
+      if (slot.radius > 0) {
+        ctx.roundRect(slot.x, slot.y, slot.w, slot.h, slot.radius)
+      } else {
+        ctx.rect(slot.x, slot.y, slot.w, slot.h)
+      }
+      ctx.clip()
+
       if (i < photos.length) {
         const photo = photos[i]
         const off = slotOffsets[i] || { ox: 0, oy: 0, scale: 1 }
@@ -1200,21 +1308,8 @@ function FramePreviewCanvas({ frame, photos, slotOffsets }: {
     const W = frame.width, H = frame.height
     canvas.width = W; canvas.height = H
 
-    // Draw the full frame image
+    // Draw the full frame image over the photos (photos will show through transparent areas of the PNG)
     ctx.drawImage(frameImg, 0, 0, W, H)
-
-    // Punch out slot areas so photos show through
-    ctx.globalCompositeOperation = 'destination-out'
-    frame.slots.forEach(slot => {
-      ctx.beginPath()
-      if (slot.radius > 0) {
-        ctx.roundRect(slot.x, slot.y, slot.w, slot.h, slot.radius)
-      } else {
-        ctx.rect(slot.x, slot.y, slot.w, slot.h)
-      }
-      ctx.fill()
-    })
-    ctx.globalCompositeOperation = 'source-over'
   }, [frame, frameImg])
 
   return (

@@ -14,6 +14,7 @@ import {
     X
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface FrameEditorProps {
@@ -42,6 +43,7 @@ export interface FrameTemplate {
   height: number
   slots: FrameSlot[]
   createdAt: number
+  _bucketPath?: string
 }
 
 type Tool = 'select' | 'draw'
@@ -68,6 +70,7 @@ function uid() { return `slot-${Date.now()}-${Math.random().toString(36).slice(2
 
 // ─── Component ──────────────────────────────────────────────
 export default function FrameEditorClient({ embedded = false, onSave, onClose, initialTemplate }: FrameEditorProps = {}) {
+  const router = useRouter()
   const { toast } = useToast()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -113,6 +116,9 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
   const [isSavingCloud, setIsSavingCloud] = useState(false)
   const [showExport, setShowExport] = useState(false)
 
+  // Active tracking
+  const [frameId, setFrameId] = useState<string | null>(null)
+
   // Saved templates
   const [savedTemplates, setSavedTemplates] = useState<FrameTemplate[]>([])
 
@@ -137,6 +143,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
   // Load initial template for editing
   useEffect(() => {
     if (!initialTemplate) return
+    setFrameId(initialTemplate.id)
     setFrameName(initialTemplate.name)
     setFrameW(initialTemplate.width)
     setFrameH(initialTemplate.height)
@@ -145,6 +152,10 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
     setSelectedId(null)
     if (initialTemplate.frameDataUrl) {
       const img = new Image()
+      // Allow cross-origin so canvas.toDataURL() works for Supabase CDN images
+      if (initialTemplate.frameDataUrl.startsWith('http')) {
+        img.crossOrigin = 'anonymous'
+      }
       img.onload = () => setFrameImg(img)
       img.src = initialTemplate.frameDataUrl
     } else {
@@ -273,8 +284,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
     ctx.scale(scale, scale)
 
     // Background
-    ctx.fillStyle = '#f3f4f6'
-    ctx.fillRect(0, 0, frameW, frameH)
+    ctx.clearRect(0, 0, frameW, frameH)
 
     // Grid
     if (showGrid) {
@@ -296,10 +306,21 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
     if (showPreview) {
       slots.forEach((slot, i) => {
         ctx.save()
+        if (slot.rotation) {
+          const cx = slot.x + slot.w / 2
+          const cy = slot.y + slot.h / 2
+          ctx.translate(cx, cy)
+          ctx.rotate((slot.rotation * Math.PI) / 180)
+          ctx.translate(-cx, -cy)
+        }
+        ctx.beginPath()
         if (slot.radius > 0) {
           roundRect(ctx, slot.x, slot.y, slot.w, slot.h, slot.radius)
-          ctx.clip()
+        } else {
+          ctx.rect(slot.x, slot.y, slot.w, slot.h)
         }
+        ctx.clip()
+        
         if (sampleImgs[i % sampleImgs.length]?.complete) {
           ctx.drawImage(sampleImgs[i % sampleImgs.length], slot.x, slot.y, slot.w, slot.h)
         } else {
@@ -310,7 +331,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
       })
     }
 
-    // Frame overlay
+    // Frame overlay (exactly as it is, no hole punching)
     if (frameImg) {
       ctx.drawImage(frameImg, 0, 0, frameW, frameH)
     }
@@ -320,6 +341,14 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
       slots.forEach((slot, i) => {
         const isSelected = slot.id === selectedId
         ctx.save()
+
+        if (slot.rotation) {
+          const cx = slot.x + slot.w / 2
+          const cy = slot.y + slot.h / 2
+          ctx.translate(cx, cy)
+          ctx.rotate((slot.rotation * Math.PI) / 180)
+          ctx.translate(-cx, -cy)
+        }
 
         // Slot fill — slightly more visible
         ctx.fillStyle = isSelected ? 'rgba(255, 107, 74, 0.18)' : 'rgba(59, 130, 246, 0.12)'
@@ -424,6 +453,18 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
 
   function hitTestHandle(slot: FrameSlot, fx: number, fy: number): Handle {
     const hs = 12 / scale
+    
+    // Inverse rotate point to AABB frame for accurate hit testing of rotated slots
+    let tx = fx, ty = fy
+    if (slot.rotation) {
+      const cx = slot.x + slot.w / 2
+      const cy = slot.y + slot.h / 2
+      const rad = (-slot.rotation * Math.PI) / 180
+      const cos = Math.cos(rad), sin = Math.sin(rad)
+      tx = cos * (fx - cx) - sin * (fy - cy) + cx
+      ty = sin * (fx - cx) + cos * (fy - cy) + cy
+    }
+
     const corners: { h: Handle; x: number; y: number }[] = [
       { h: 'nw', x: slot.x, y: slot.y },
       { h: 'ne', x: slot.x + slot.w, y: slot.y },
@@ -431,9 +472,9 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
       { h: 'se', x: slot.x + slot.w, y: slot.y + slot.h },
     ]
     for (const c of corners) {
-      if (Math.abs(fx - c.x) < hs && Math.abs(fy - c.y) < hs) return c.h
+      if (Math.abs(tx - c.x) < hs && Math.abs(ty - c.y) < hs) return c.h
     }
-    if (fx >= slot.x && fx <= slot.x + slot.w && fy >= slot.y && fy <= slot.y + slot.h) return 'move'
+    if (tx >= slot.x && tx <= slot.x + slot.w && ty >= slot.y && ty <= slot.y + slot.h) return 'move'
     return null
   }
 
@@ -720,20 +761,47 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
     toast(`✨ ${preset.name} — ${newSlots.length} slots`, 'success')
   }
 
+  // Convert blob/URL to base64 safely
+  const getBase64FrameData = (): string => {
+    let dataUrlToSave = frameDataUrl
+    // Convert to base64 if it's a blob or remote URL (not already base64)
+    if (frameImg && (!dataUrlToSave || !dataUrlToSave.startsWith('data:'))) {
+      const canvas = document.createElement('canvas')
+      canvas.width = frameW
+      canvas.height = frameH
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(frameImg, 0, 0, frameW, frameH)
+        dataUrlToSave = canvas.toDataURL('image/png')
+      }
+    }
+    return dataUrlToSave
+  }
+
   // ─── Save template ────────────────────────────────────────
   const saveTemplate = () => {
     if (slots.length === 0) { toast('Add at least 1 slot first', 'error'); return }
+    const currentId = frameId || `frame-${Date.now()}`
+    const b64Url = getBase64FrameData()
     const template: FrameTemplate = {
-      id: `frame-${Date.now()}`, name: frameName,
-      frameDataUrl, width: frameW, height: frameH,
+      id: currentId, name: frameName,
+      frameDataUrl: b64Url, width: frameW, height: frameH,
       slots: slots.map(s => ({ ...s })), createdAt: Date.now()
     }
-    const updated = [...savedTemplates.filter(t => t.name !== frameName), template]
+    const updated = [...savedTemplates.filter(t => t.id !== currentId), template]
     saveTemplates(updated)
     setSavedTemplates(updated)
+    setFrameId(currentId)
+    // Update active url so it doesn't try converting again
+    if (b64Url !== frameDataUrl) setFrameDataUrl(b64Url)
+    
     toast(`💾 "${frameName}" saved!`, 'success')
     // Notify parent in embedded mode
     if (onSave) onSave(template)
+    if (!embedded) {
+      localStorage.setItem('sticker-studio-auto-select-frame', currentId)
+      router.push('/photobooth')
+    }
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 10000)
   }
@@ -742,14 +810,24 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
   const saveToCloud = async () => {
     if (slots.length === 0) { toast('Add at least 1 slot first', 'error'); return }
     setIsSavingCloud(true)
+    const currentId = frameId || `frame-${Date.now()}`
+    const b64Url = getBase64FrameData()
+    
     try {
       const res = await fetch('/api/frames', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: frameName, frameDataUrl, width: frameW, height: frameH, slots: slots.map(s => ({ ...s })) })
+        body: JSON.stringify({ id: currentId, name: frameName, frameDataUrl: b64Url, width: frameW, height: frameH, slots: slots.map(s => ({ ...s })) })
       })
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Upload failed') }
+      setFrameId(currentId)
+      if (b64Url !== frameDataUrl) setFrameDataUrl(b64Url)
       toast(`☁️ "${frameName}" saved to cloud!`, 'success')
+      if (onSave) onSave({ id: currentId, name: frameName, frameDataUrl: b64Url, width: frameW, height: frameH, slots, createdAt: Date.now() })
+      if (!embedded) {
+        localStorage.setItem('sticker-studio-auto-select-frame', currentId)
+        router.push('/photobooth')
+      }
       setJustSaved(true)
       setTimeout(() => setJustSaved(false), 10000)
     } catch (err: any) {
@@ -776,12 +854,19 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
     const canvas = document.createElement('canvas')
     canvas.width = frameW; canvas.height = frameH
     const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#fff'
-    ctx.fillRect(0, 0, frameW, frameH)
+    ctx.clearRect(0, 0, frameW, frameH)
     // Draw sample photos
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i]
       ctx.save()
+      if (slot.rotation) {
+        const cx = slot.x + slot.w / 2
+        const cy = slot.y + slot.h / 2
+        ctx.translate(cx, cy)
+        ctx.rotate((slot.rotation * Math.PI) / 180)
+        ctx.translate(-cx, -cy)
+      }
+      
       if (slot.radius > 0) { roundRect(ctx, slot.x, slot.y, slot.w, slot.h, slot.radius); ctx.clip() }
       if (sampleImgs[i % sampleImgs.length]?.complete) {
         ctx.drawImage(sampleImgs[i % sampleImgs.length], slot.x, slot.y, slot.w, slot.h)
@@ -792,13 +877,40 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
       ctx.restore()
     }
     // Overlay frame
-    if (frameImg) ctx.drawImage(frameImg, 0, 0, frameW, frameH)
+    if (frameImg) {
+      const fCanvas = document.createElement('canvas')
+      fCanvas.width = frameW; fCanvas.height = frameH
+      const fCtx = fCanvas.getContext('2d')!
+      fCtx.drawImage(frameImg, 0, 0, frameW, frameH)
+      
+      fCtx.globalCompositeOperation = 'destination-out'
+      slots.forEach(slot => {
+        fCtx.save()
+        if (slot.rotation) {
+          const cx = slot.x + slot.w / 2
+          const cy = slot.y + slot.h / 2
+          fCtx.translate(cx, cy)
+          fCtx.rotate((slot.rotation * Math.PI) / 180)
+          fCtx.translate(-cx, -cy)
+        }
+        if (slot.radius > 0) {
+          roundRect(fCtx, slot.x, slot.y, slot.w, slot.h, slot.radius)
+          fCtx.fill()
+        } else {
+          fCtx.fillRect(slot.x, slot.y, slot.w, slot.h)
+        }
+        fCtx.restore()
+      })
+      
+      ctx.drawImage(fCanvas, 0, 0, frameW, frameH)
+    }
     downloadUrl(canvas.toDataURL('image/png'), `${frameName.toLowerCase().replace(/\s+/g, '-')}-preview.png`)
     toast('🖼️ Preview exported!', 'success')
   }
 
   // ─── Load saved template ──────────────────────────────────
   const loadTemplate = (t: FrameTemplate) => {
+    setFrameId(t.id)
     setFrameName(t.name)
     setFrameW(t.width); setFrameH(t.height)
     setSlots(t.slots)
@@ -841,7 +953,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
               </button>
             ) : (
               <button
-                onClick={() => { setSlots([]); setFrameImg(null); setFrameDataUrl(''); setFrameName('My Frame') }}
+                onClick={() => { setFrameId(null); setSlots([]); setFrameImg(null); setFrameDataUrl(''); setFrameName('My Frame') }}
                 title="Clear frame"
                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-(--card-bg) hover:bg-red-500/10 hover:text-red-400 text-(--text-muted) transition-all cursor-pointer shrink-0"
               >
@@ -968,12 +1080,21 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
                 </label>
               ))}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase shrink-0">Radius</span>
-              <input type="range" min={0} max={Math.min(selectedSlot.w, selectedSlot.h) / 2} value={selectedSlot.radius}
-                onChange={e => setSlots(prev => prev.map(s => s.id === selectedId ? { ...s, radius: +e.target.value } : s))}
-                className="flex-1 accent-[#FF6B4A]" />
-              <span className="text-[10px] text-[var(--text-muted)] w-8 text-right font-mono">{selectedSlot.radius}px</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase shrink-0 w-10">Radius</span>
+                <input type="range" min={0} max={Math.min(selectedSlot.w, selectedSlot.h) / 2} value={selectedSlot.radius}
+                  onChange={e => setSlots(prev => prev.map(s => s.id === selectedId ? { ...s, radius: +e.target.value } : s))}
+                  className="flex-1 accent-[#FF6B4A]" />
+                <span className="text-[10px] text-[var(--text-muted)] w-8 text-right font-mono">{selectedSlot.radius}px</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase shrink-0 w-10">Rotate</span>
+                <input type="range" min={-180} max={180} value={selectedSlot.rotation || 0}
+                  onChange={e => setSlots(prev => prev.map(s => s.id === selectedId ? { ...s, rotation: +e.target.value } : s))}
+                  className="flex-1 accent-[#FF6B4A]" />
+                <span className="text-[10px] text-[var(--text-muted)] w-8 text-right font-mono">{selectedSlot.rotation || 0}°</span>
+              </div>
             </div>
           </div>
         )}
@@ -1001,10 +1122,10 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
           <button onClick={() => setShowPreview(!showPreview)} className={`w-full py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${showPreview ? 'bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/20' : 'bg-[var(--card-bg)] text-[var(--text-secondary)] border border-[var(--overlay-border)] hover:bg-[var(--card-bg-hover)]'}`}>
             <Eye className="w-3.5 h-3.5" /> {showPreview ? 'Exit Preview' : 'Preview'}
           </button>
-          <div className="flex gap-1.5">
-            <Button onClick={saveTemplate} className="flex-1 gap-1.5" size="sm"><Save className="w-3.5 h-3.5" /> Save</Button>
-            <Button onClick={saveToCloud} className="flex-1 gap-1.5" size="sm" disabled={isSavingCloud}>
-              {isSavingCloud ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5" />} Cloud
+          <div className="flex flex-col gap-1.5">
+            <Button onClick={saveTemplate} className="w-full gap-1.5" size="sm"><Save className="w-3.5 h-3.5" /> Save to Local</Button>
+            <Button onClick={saveToCloud} className="w-full gap-1.5" size="sm" disabled={isSavingCloud}>
+              {isSavingCloud ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5" />} Save to Cloud
             </Button>
           </div>
 
@@ -1090,9 +1211,17 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
         </div>
 
         <div ref={containerRef} className="flex-1 w-full overflow-auto grid place-items-center p-4">
-          <div className="relative shrink-0" style={{ width: frameW * scale, height: frameH * scale }}>
+          <div className="relative shrink-0 shadow-2xl rounded-lg overflow-hidden" style={{ width: frameW * scale, height: frameH * scale }}>
+            {/* Checkerboard background for transparency */}
+            <div 
+              className="absolute inset-0 z-0 opacity-80" 
+              style={{ 
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%23ffffff'/%3E%3Crect width='10' height='10' fill='%23e5e7eb'/%3E%3Crect x='10' y='10' width='10' height='10' fill='%23e5e7eb'/%3E%3C/svg%3E")`
+              }} 
+            />
+            
             <canvas ref={canvasRef}
-              className={`shadow-2xl rounded-lg ${tool === 'draw' ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-default'}`}
+              className={`relative z-10 ${tool === 'draw' ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-default'}`}
               style={{ width: frameW * scale, height: frameH * scale }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -1123,8 +1252,8 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
                 <Info className="w-4.5 h-4.5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-sm text-(--text-primary) leading-tight">Hướng dẫn tạo Frame chuẩn</h3>
-                <p className="text-[11px] text-(--text-muted) mt-0.5">Chọn cách phù hợp với bạn bên dưới</p>
+                <h3 className="font-bold text-sm text-(--text-primary) leading-tight">Custom Frame Guide</h3>
+                <p className="text-[11px] text-(--text-muted) mt-0.5">Choose the best method to create frames</p>
               </div>
               <button
                 onClick={() => setShowGuide(false)}
@@ -1141,19 +1270,19 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
               <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🎨</span>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#3B82F6]">Cách 1 — Canva / Figma (Khuyên dùng)</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#3B82F6]">Method 1 — Canva / Figma (Recommended)</h4>
                 </div>
                 <p className="text-xs text-(--text-secondary) leading-relaxed">
-                  Thiết kế khung với <b className="text-(--text-primary)">nền trong suốt (transparent)</b>. Các ô trống để ảnh sẽ tự nhận diện chính xác nhất.
+                  Design your frame with a <b className="text-(--text-primary)">transparent background</b>. Empty spaces will be accurately auto-detected as photo slots.
                 </p>
                 <div className="space-y-1.5 text-xs text-(--text-muted)">
                   <div className="flex gap-2">
                     <span className="shrink-0 font-bold text-(--text-secondary)">Canva:</span>
-                    <span>Khi tải xuống, chọn PNG và bật <span className="italic font-semibold text-(--text-primary)">&quot;Transparent background&quot;</span> (cần Canva Pro).</span>
+                    <span>When exporting, choose PNG and enable <span className="italic font-semibold text-(--text-primary)">&quot;Transparent background&quot;</span> (requires Canva Pro).</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="shrink-0 font-bold text-(--text-secondary)">Figma / PS:</span>
-                    <span>Xuất file PNG với nền trong suốt bình thường là xong.</span>
+                    <span>Simply export as a standard PNG with a transparent background.</span>
                   </div>
                 </div>
               </div>
@@ -1162,20 +1291,39 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
               <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🤖</span>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#FF6B4A]">Cách 2 — Dùng AI tạo ảnh</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#FF6B4A]">Method 2 — AI Generators (ChatGPT)</h4>
                 </div>
                 <p className="text-xs text-(--text-secondary) leading-relaxed">
-                  AI không xuất được nền trong suốt, hãy yêu cầu AI tạo khoảng trống <b className="text-(--text-primary)">màu trắng tinh</b>. App sẽ tự nhận diện và biến chúng thành slot.
+                  Modern AI tools now support transparent PNG exports. Ask the AI to generate a frame with <b className="text-(--text-primary)">completely transparent slots</b>. (If it generates solid white backgrounds instead, the App can still auto-detect them).
                 </p>
 
                 {/* Prompt box */}
                 <div className="rounded-lg bg-(--background) border border-(--overlay-border) p-3 space-y-1.5">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-(--text-muted) flex items-center gap-1">
-                    <span>💡</span> Prompt mẫu (copy & paste):
+                    <span>💡</span> Prompt Template (Copy & Paste):
                   </p>
                   <p className="text-[11px] text-(--text-secondary) italic leading-relaxed select-all cursor-text">
-                    A photobooth frame template, cosmic space theme, with completely solid WHITE rectangular photo slots in a 3x2 grid. Decorated with astronauts and planets. Photo slots MUST be totally plain white. 2d flat vector illustration --ar 2:3
+                    A photobooth frame template, cosmic space theme, with rectangular photo slots in a 3x2 grid. Decorated with astronauts and planets. Please generate this as a transparent PNG where the photo slots are COMPLETELY TRANSPARENT. 2d flat vector illustration.
                   </p>
+                </div>
+              </div>
+
+              {/* Workflow */}
+              <div className="rounded-xl bg-(--card-bg) border border-(--overlay-border) p-3.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🚀</span>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#10B981]">Setup Workflow & Tips</h4>
+                </div>
+                <div className="text-xs text-(--text-secondary) leading-relaxed space-y-2">
+                  <p>1. Upload your custom frame design (PNG format).</p>
+                  <p>2. Click <b>Auto-detect slots</b> to scan and extract photo regions.</p>
+                  <p>3. <b>Fine-tuning:</b> Manually select each slot to adjust its Width, Height, Border Radius, and Rotation for a perfect fit.</p>
+                  <div className="p-2.5 mt-1 bg-[#10B981]/10 rounded-lg border border-[#10B981]/20">
+                    <p className="text-[#10B981] font-semibold flex items-center gap-1.5 mb-1"><span className="text-sm">💡</span> Pro tip for seamless edges:</p>
+                    <p className="text-[11.5px] text-(--text-secondary) opacity-90">
+                      Captured photos are rendered on the <b>layer underneath</b> the custom frame. You should scale your slots <b>slightly larger than the frame&apos;s cutouts</b> to prevent visible gaps—it won&apos;t overlap or ruin the artwork!
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1187,7 +1335,7 @@ export default function FrameEditorClient({ embedded = false, onSave, onClose, i
                 onClick={() => setShowGuide(false)}
                 className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer bg-linear-to-r from-[#FF6B4A] to-[#FF8B6A] hover:opacity-90 shadow-lg shadow-[#FF6B4A]/20"
               >
-                Đã hiểu! Bắt đầu tạo frame 🚀
+                Got it! Let&apos;s build 🚀
               </button>
             </div>
           </div>

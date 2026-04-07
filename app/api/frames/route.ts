@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -13,17 +15,17 @@ const FOLDER = 'frames'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, frameDataUrl, width, height, slots } = body
+    const { id, name, frameDataUrl, width, height, slots } = body
 
     if (!name || !slots || slots.length === 0) {
       return NextResponse.json({ error: 'Missing name or slots' }, { status: 400 })
     }
 
-    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     const ts = Date.now()
-    const basePath = `${FOLDER}/${slug}-${ts}`
+    const currentId = id || `frame-${ts}`
+    const basePath = `${FOLDER}/${currentId}`
 
-    // Upload frame PNG (if provided)
+    // Upload frame PNG (if provided as base64), or preserve existing URL
     let pngUrl: string | null = null
     if (frameDataUrl && frameDataUrl.startsWith('data:')) {
       const base64 = frameDataUrl.split(',')[1]
@@ -38,11 +40,14 @@ export async function POST(req: NextRequest) {
 
       const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(pngPath)
       pngUrl = urlData.publicUrl
+    } else if (frameDataUrl && frameDataUrl.startsWith('http')) {
+      // Already a URL (re-saving existing cloud frame) — keep it
+      pngUrl = frameDataUrl
     }
 
     // Upload metadata JSON
     const metadata = {
-      id: `frame-${ts}`,
+      id: currentId,
       name,
       width,
       height,
@@ -91,7 +96,9 @@ export async function GET() {
 
         try {
           const text = await data.text()
-          return JSON.parse(text)
+          const parsed = JSON.parse(text)
+          // Inject the exact filename used in the bucket so we can delete it later
+          return { ...parsed, _bucketPath: `${FOLDER}/${f.name.replace('.json', '')}` }
         } catch {
           return null
         }
@@ -117,11 +124,14 @@ export async function DELETE(req: NextRequest) {
 
     // Delete both PNG and JSON
     const filesToDelete = [`${basePath}.png`, `${basePath}.json`]
-    const { error } = await supabase.storage.from(BUCKET).remove(filesToDelete)
+    const { data, error } = await supabase.storage.from(BUCKET).remove(filesToDelete)
 
     if (error) throw error
+    if (!data || data.length === 0) {
+      throw new Error(`Failed to delete (RLS policy missing for DELETE, or files not found).`)
+    }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, deleted: data })
   } catch (err: any) {
     console.error('[frames/DELETE]', err)
     return NextResponse.json({ error: err.message || 'Delete failed' }, { status: 500 })

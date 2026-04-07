@@ -33,10 +33,10 @@ export function detectSlots(
   } = {}
 ): DetectedSlot[] {
   const {
-    alphaThreshold = 30,
+    alphaThreshold = 10,   // Reduced from 30 to prevent soft drop-shadows from bridging distinct slots
     minAreaFraction = 0.01,
-    mergeDistance = 0.03,
-    analysisSize = 600,
+    mergeDistance = 0.005, // Reduced from 0.03 to avoid merging distinct adjacent slots
+    analysisSize = 2048,   // Increased from 600 to prevent thin dividing lines from disappearing
   } = options
 
   const origW = image.naturalWidth
@@ -113,7 +113,7 @@ export function detectSlots(
   const result = runDetection(mask, aW, aH, totalPixels, minAreaFraction, effectiveMerge, scaleFactor, origW, origH)
 
   if (result.length > 0) {
-    console.log(`[slot-detector] ✅ Detected ${result.length} slot(s)`)
+    console.log(`[slot-detector] ✅ Detected ${result.length} slot(s):`, result)
   }
 
   return result
@@ -172,6 +172,23 @@ function runDetection(
   const minPixels = totalPixels * minAreaFraction
   let significantRegions = regions.filter(r => r.pixelCount >= minPixels)
 
+  // Discard exterior transparent background:
+  // If a region touches at least 3 edges of the image, we assume it's the outside canvas/background
+  significantRegions = significantRegions.filter(r => {
+    const touchesLeft = r.minX < 5
+    const touchesRight = r.maxX > aW - 5
+    const touchesTop = r.minY < 5
+    const touchesBottom = r.maxY > aH - 5
+    const edgeCount = (touchesLeft ? 1 : 0) + (touchesRight ? 1 : 0) + (touchesTop ? 1 : 0) + (touchesBottom ? 1 : 0)
+    
+    // Also, usually the exterior is huge. We can safely ignore it.
+    if (edgeCount >= 3) {
+      console.log(`[slot-detector] Ignoring exterior background region (touches ${edgeCount} edges)`)
+      return false
+    }
+    return true
+  })
+
   // Filter by aspect ratio (reject very thin/elongated regions — likely borders)
   significantRegions = significantRegions.filter(r => {
     const rw = r.maxX - r.minX + 1
@@ -182,7 +199,7 @@ function runDetection(
     return aspect < 5 && fillRatio > 0.3
   })
 
-  console.log(`[slot-detector] Found ${regions.length} total regions, ${significantRegions.length} significant (>= ${(minAreaFraction * 100).toFixed(1)}% area, good aspect/fill ratio)`)
+  console.log(`[slot-detector] Found ${regions.length} total regions, ${significantRegions.length} significant (>= ${(minAreaFraction * 100).toFixed(1)}% area, good aspect/fill ratio, not exterior)`)
 
   if (significantRegions.length === 0) return []
 
