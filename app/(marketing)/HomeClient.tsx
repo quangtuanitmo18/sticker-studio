@@ -137,7 +137,7 @@ export default function LandingPage() {
                 className="mt-10 flex flex-wrap gap-4"
               >
                 <Link
-                  href="/maker"
+                  href="/photobooth"
                   className="group inline-flex items-center gap-3 px-7 py-3.5 rounded-full bg-gradient-to-r from-[#FF6B4A] to-[#F59E0B] text-white font-bold text-[15px] shadow-[0_8px_32px_rgba(255,107,74,0.25)] hover:shadow-[0_12px_40px_rgba(255,107,74,0.35)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 active:scale-[0.97]"
                 >
                   Start creating
@@ -377,7 +377,7 @@ export default function LandingPage() {
                   Free to use, no account required.
                 </p>
                 <Link
-                  href="/maker"
+                  href="/photobooth"
                   className="group inline-flex items-center gap-3 px-7 py-3.5 rounded-full bg-white text-[#0a0a0a] font-bold text-[15px] shadow-[0_8px_32px_rgba(0,0,0,0.15)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.97]"
                 >
                   Open Studio

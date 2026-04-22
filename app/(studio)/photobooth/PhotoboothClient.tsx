@@ -605,19 +605,12 @@ export default function PhotoboothPage() {
 
   const handleFrameSwitch = useCallback((customFrame: FrameTemplate | null, stripTemplateTarget: StripTemplate | null = null) => {
     setIsSwitchingFrame(true)
-    // Wait for UI to render the loading state
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        if (customFrame) {
-          setActiveCustomFrame(customFrame)
-        } else if (stripTemplateTarget) {
-          setActiveCustomFrame(null)
-          setStripTemplate(stripTemplateTarget)
-        }
-        // Give time for image to load or canvas to mount before hiding loader
-        setTimeout(() => setIsSwitchingFrame(false), 200) 
-      }, 30)
-    })
+    if (customFrame) {
+      setActiveCustomFrame(customFrame)
+    } else if (stripTemplateTarget) {
+      setActiveCustomFrame(null)
+      setStripTemplate(stripTemplateTarget)
+    }
   }, [])
 
   const SIDE = [
@@ -1046,9 +1039,9 @@ export default function PhotoboothPage() {
                 )}
                 
                 {activeCustomFrame ? (
-                  <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} />
+                  <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} onLoaded={() => setIsSwitchingFrame(false)} />
                 ) : (
-                  <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} />
+                  <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} onLoaded={() => setIsSwitchingFrame(false)} />
                 )}
                 {/* Konva overlay layer for text/assets — only block parent deselect via onClick */}
                 {previewDims.w > 0 && previewDims.h > 0 && (
@@ -1181,7 +1174,7 @@ function Slider({ value, onChange, min, max, label }: { value: number; onChange:
   return <div className="flex items-center gap-2"><input type="range" min={min} max={max} value={value} onChange={e => onChange(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${pct}%, rgba(255,255,255,0.06) ${pct}%)` }} /><span className="text-[10px] text-(--text-muted) font-mono w-10 text-right">{label}</span></div>
 }
 
-function StripCanvas({ template, photos, bg }: { template: StripTemplate; photos: HTMLCanvasElement[]; bg: string }) {
+function StripCanvas({ template, photos, bg, onLoaded }: { template: StripTemplate; photos: HTMLCanvasElement[]; bg: string; onLoaded?: () => void }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     if (!ref.current) return
@@ -1233,13 +1226,21 @@ function StripCanvas({ template, photos, bg }: { template: StripTemplate; photos
         }
       }
     }
-  }, [template, photos, bg])
+    
+    // Allow the browser to paint before notifying load complete
+    if (onLoaded) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => onLoaded())
+      })
+    }
+  }, [template, photos, bg, onLoaded])
   return <canvas ref={ref} className="w-full h-full" />
 }
 
-function FramePreviewCanvas({ frame, photos, slotOffsets }: {
+function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
   frame: FrameTemplate; photos: HTMLCanvasElement[]
   slotOffsets: Record<number, { ox: number; oy: number; scale: number }>
+  onLoaded?: () => void
 }) {
   const photosCanvasRef = useRef<HTMLCanvasElement>(null)
   const frameCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -1247,11 +1248,23 @@ function FramePreviewCanvas({ frame, photos, slotOffsets }: {
 
   // Load frame image
   useEffect(() => {
-    if (!frame.frameDataUrl) { setFrameImg(null); return }
+    let active = true
+    if (!frame.frameDataUrl) { 
+      setFrameImg(null)
+      if (onLoaded) requestAnimationFrame(() => onLoaded())
+      return 
+    }
+    setFrameImg(null) // clear previous image to avoid overlap
     const img = new Image()
-    img.onload = () => setFrameImg(img)
+    img.onload = () => {
+      if (active) {
+        setFrameImg(img)
+        if (onLoaded) requestAnimationFrame(() => onLoaded())
+      }
+    }
     img.src = frame.frameDataUrl
-  }, [frame.frameDataUrl])
+    return () => { active = false }
+  }, [frame.frameDataUrl, onLoaded])
 
   // Render photos canvas (bottom layer)
   useEffect(() => {

@@ -49,7 +49,7 @@ function Navbar() {
 
           {/* Desktop CTA */}
           <Link
-            href="/maker"
+            href="/photobooth"
             className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card-bg-hover)] border border-[var(--overlay-border)] text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[#FF6B4A]/15 hover:text-[#FF6B4A] hover:border-[#FF6B4A]/20 transition-all duration-300 active:scale-[0.97]"
           >
             Open Studio
@@ -82,7 +82,7 @@ function Navbar() {
             </Link>
           ))}
           <Link
-            href="/maker"
+            href="/photobooth"
             onClick={() => setOpen(false)}
             className="mt-4 inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-[#FF6B4A] to-[#F59E0B] text-white font-bold animate-slide-up"
             style={{ animationDelay: '0.3s' }}
