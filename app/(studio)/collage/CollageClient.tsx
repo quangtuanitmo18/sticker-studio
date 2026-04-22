@@ -3,7 +3,10 @@
 import { AssetPanel } from '@/components/shared/AssetPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
 import { ExportFormatPanel, exportCanvasAs } from '@/components/shared/ExportFormatPanel'
-import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
+import OverlayCanvas, {
+  type CanvasElement,
+  type OverlayCanvasHandle,
+} from '@/components/shared/OverlayCanvas'
 import { OverlayList } from '@/components/shared/OverlayList'
 import { SidebarHeader } from '@/components/shared/SidebarHeader'
 import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
@@ -12,8 +15,22 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { useHistory } from '@/hooks/use-history'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
-import { Download, Grid, GripVertical, Layers, Loader2, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, UploadCloud } from 'lucide-react'
+import {
+  Download,
+  Grid,
+  GripVertical,
+  Layers,
+  Loader2,
+  Plus,
+  Redo2,
+  RotateCcw,
+  Trash2,
+  Type,
+  Undo2,
+  UploadCloud,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useDropzone } from 'react-dropzone'
 
 // ─── Layout templates ────────────────────────────────────────
@@ -28,9 +45,13 @@ interface LayoutTemplate {
 
 const LAYOUTS: LayoutTemplate[] = [
   {
-    id: 'grid2x2', label: '2×2 Grid', emoji: '⬜', cells: 4,
+    id: 'grid2x2',
+    label: '2×2 Grid',
+    emoji: '⬜',
+    cells: 4,
     positions: (w, h, p) => {
-      const cw = (w - p * 3) / 2, ch = (h - p * 3) / 2
+      const cw = (w - p * 3) / 2,
+        ch = (h - p * 3) / 2
       return [
         { x: p, y: p, w: cw, h: ch },
         { x: p * 2 + cw, y: p, w: cw, h: ch },
@@ -40,9 +61,13 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'grid3x3', label: '3×3 Grid', emoji: '🔲', cells: 9,
+    id: 'grid3x3',
+    label: '3×3 Grid',
+    emoji: '🔲',
+    cells: 9,
     positions: (w, h, p) => {
-      const cw = (w - p * 4) / 3, ch = (h - p * 4) / 3
+      const cw = (w - p * 4) / 3,
+        ch = (h - p * 4) / 3
       const result = []
       for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 3; c++) {
@@ -53,7 +78,10 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'hero_left', label: 'Hero Left', emoji: '◧', cells: 3,
+    id: 'hero_left',
+    label: 'Hero Left',
+    emoji: '◧',
+    cells: 3,
     positions: (w, h, p) => {
       const big = (w - p * 3) * 0.6
       const smW = w - p * 3 - big
@@ -66,7 +94,10 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'hero_top', label: 'Hero Top', emoji: '⬒', cells: 3,
+    id: 'hero_top',
+    label: 'Hero Top',
+    emoji: '⬒',
+    cells: 3,
     positions: (w, h, p) => {
       const bigH = (h - p * 3) * 0.6
       const smW = (w - p * 3) / 2
@@ -79,7 +110,10 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'strip_h', label: 'Strip H', emoji: '▬', cells: 3,
+    id: 'strip_h',
+    label: 'Strip H',
+    emoji: '▬',
+    cells: 3,
     positions: (w, h, p) => {
       const cw = (w - p * 4) / 3
       return [
@@ -90,7 +124,10 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'strip_v', label: 'Strip V', emoji: '▮', cells: 3,
+    id: 'strip_v',
+    label: 'Strip V',
+    emoji: '▮',
+    cells: 3,
     positions: (w, h, p) => {
       const ch = (h - p * 4) / 3
       return [
@@ -101,13 +138,16 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'focus', label: 'Focus', emoji: '🎯', cells: 5,
+    id: 'focus',
+    label: 'Focus',
+    emoji: '🎯',
+    cells: 5,
     positions: (w, h, p) => {
       const bigW = (w - p * 3) * 0.6
       const bigH = (h - p * 3) * 0.6
       const smW = w - p * 3 - bigW
       const smSide = (bigH - p) / 2
-      const smH = (h - p * 3) - bigH
+      const smH = h - p * 3 - bigH
       return [
         { x: p, y: p, w: bigW, h: bigH },
         { x: p * 2 + bigW, y: p, w: smW, h: smSide },
@@ -118,7 +158,10 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'l_shape', label: 'L-Shape', emoji: '⌐', cells: 4,
+    id: 'l_shape',
+    label: 'L-Shape',
+    emoji: '⌐',
+    cells: 4,
     positions: (w, h, p) => {
       const bigW = (w - p * 3) * 0.65
       const bigH = (h - p * 3) * 0.65
@@ -133,7 +176,10 @@ const LAYOUTS: LayoutTemplate[] = [
     },
   },
   {
-    id: 'triptych', label: 'Triptych', emoji: '🖼️', cells: 3,
+    id: 'triptych',
+    label: 'Triptych',
+    emoji: '🖼️',
+    cells: 3,
     positions: (w, h, p) => {
       const sideW = (w - p * 4) * 0.25
       const centerW = (w - p * 4) * 0.5
@@ -147,17 +193,55 @@ const LAYOUTS: LayoutTemplate[] = [
 ]
 
 const BG_COLORS = [
-  '#0C0A09', '#ffffff', '#FF6B4A', '#F59E0B', '#10B981',
-  '#3B82F6', '#8B5CF6', '#EC4899', '#1e1e1e', '#f5f5dc',
+  '#0C0A09',
+  '#ffffff',
+  '#FF6B4A',
+  '#F59E0B',
+  '#10B981',
+  '#3B82F6',
+  '#8B5CF6',
+  '#EC4899',
+  '#1e1e1e',
+  '#f5f5dc',
 ]
 
 const BG_GRADIENTS = [
-  { id: 'g1', label: 'Sunset', css: 'linear-gradient(135deg, #FF6B4A, #F59E0B)', colors: ['#FF6B4A', '#F59E0B'] },
-  { id: 'g2', label: 'Ocean', css: 'linear-gradient(135deg, #3B82F6, #10B981)', colors: ['#3B82F6', '#10B981'] },
-  { id: 'g3', label: 'Berry', css: 'linear-gradient(135deg, #8B5CF6, #EC4899)', colors: ['#8B5CF6', '#EC4899'] },
-  { id: 'g4', label: 'Night', css: 'linear-gradient(135deg, #1e1e1e, #3B82F6)', colors: ['#1e1e1e', '#3B82F6'] },
-  { id: 'g5', label: 'Dawn', css: 'linear-gradient(135deg, #F59E0B, #EC4899)', colors: ['#F59E0B', '#EC4899'] },
-  { id: 'g6', label: 'Forest', css: 'linear-gradient(135deg, #10B981, #064E3B)', colors: ['#10B981', '#064E3B'] },
+  {
+    id: 'g1',
+    label: 'Sunset',
+    css: 'linear-gradient(135deg, #FF6B4A, #F59E0B)',
+    colors: ['#FF6B4A', '#F59E0B'],
+  },
+  {
+    id: 'g2',
+    label: 'Ocean',
+    css: 'linear-gradient(135deg, #3B82F6, #10B981)',
+    colors: ['#3B82F6', '#10B981'],
+  },
+  {
+    id: 'g3',
+    label: 'Berry',
+    css: 'linear-gradient(135deg, #8B5CF6, #EC4899)',
+    colors: ['#8B5CF6', '#EC4899'],
+  },
+  {
+    id: 'g4',
+    label: 'Night',
+    css: 'linear-gradient(135deg, #1e1e1e, #3B82F6)',
+    colors: ['#1e1e1e', '#3B82F6'],
+  },
+  {
+    id: 'g5',
+    label: 'Dawn',
+    css: 'linear-gradient(135deg, #F59E0B, #EC4899)',
+    colors: ['#F59E0B', '#EC4899'],
+  },
+  {
+    id: 'g6',
+    label: 'Forest',
+    css: 'linear-gradient(135deg, #10B981, #064E3B)',
+    colors: ['#10B981', '#064E3B'],
+  },
 ]
 
 const OUTPUT_SIZES = [
@@ -175,7 +259,7 @@ export default function CollagePage() {
   const [images, setImages] = useState<{ id: string; url: string; file: File }[]>([])
   const [layout, setLayout] = useState<LayoutTemplate>(LAYOUTS[0])
   const [bgColor, setBgColor] = useState('#0C0A09')
-  const [bgGradient, setBgGradient] = useState<typeof BG_GRADIENTS[0] | null>(null)
+  const [bgGradient, setBgGradient] = useState<(typeof BG_GRADIENTS)[0] | null>(null)
   const [padding, setPadding] = useState(12)
   const [borderRadius, setBorderRadius] = useState(16)
   const [outputSize, setOutputSize] = useState(OUTPUT_SIZES[0])
@@ -203,14 +287,17 @@ export default function CollagePage() {
   // Undo/redo
   const history = useHistory<CanvasElement[]>([])
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newImages = acceptedFiles.map(file => ({
-      id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      url: URL.createObjectURL(file),
-      file,
-    }))
-    setImages(prev => [...prev, ...newImages].slice(0, layout.cells))
-  }, [layout.cells])
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      const newImages = acceptedFiles.map((file) => ({
+        id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        url: URL.createObjectURL(file),
+        file,
+      }))
+      setImages((prev) => [...prev, ...newImages].slice(0, layout.cells))
+    },
+    [layout.cells],
+  )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -219,7 +306,7 @@ export default function CollagePage() {
   })
 
   const removeImage = (id: string) => {
-    setImages(prev => prev.filter(img => img.id !== id))
+    setImages((prev) => prev.filter((img) => img.id !== id))
   }
 
   // ─── Image drag reorder ────────────────────────────────────
@@ -227,7 +314,7 @@ export default function CollagePage() {
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault()
     if (dragIdx === null || dragIdx === idx) return
-    setImages(prev => {
+    setImages((prev) => {
       const arr = [...prev]
       const [moved] = arr.splice(dragIdx, 1)
       arr.splice(idx, 0, moved)
@@ -240,32 +327,78 @@ export default function CollagePage() {
   // ─── Asset + Text overlay handlers (Konva-based) ───────────
   const addAssetOverlay = (src: string) => {
     const pw = previewDims.w || 300
-    const newOverlays: CanvasElement[] = [...overlays, { id: `ov-${Date.now()}`, type: 'image' as const, src, x: pw / 2 - 30 + Math.random() * 40 - 20, y: (previewDims.h || 300) / 2 - 30, width: 60, height: 60 }]
+    const newOverlays: CanvasElement[] = [
+      ...overlays,
+      {
+        id: `ov-${Date.now()}`,
+        type: 'image' as const,
+        src,
+        x: pw / 2 - 30 + Math.random() * 40 - 20,
+        y: (previewDims.h || 300) / 2 - 30,
+        width: 60,
+        height: 60,
+      },
+    ]
     setOverlays(newOverlays)
     history.set(newOverlays)
   }
 
-  const addTextOverlay = (config: { text: string; fontFamily: string; fontSize: number; fill: string; stroke: string; strokeWidth: number }) => {
-    const newOverlays: CanvasElement[] = [...overlays, { id: `txt-${Date.now()}`, type: 'text' as const, text: config.text, fontFamily: config.fontFamily, fontSize: config.fontSize, fill: config.fill, stroke: config.stroke, strokeWidth: config.strokeWidth, x: (previewDims.w || 300) / 4, y: (previewDims.h || 300) / 2 }]
+  const addTextOverlay = (config: {
+    text: string
+    fontFamily: string
+    fontSize: number
+    fill: string
+    stroke: string
+    strokeWidth: number
+  }) => {
+    const newOverlays: CanvasElement[] = [
+      ...overlays,
+      {
+        id: `txt-${Date.now()}`,
+        type: 'text' as const,
+        text: config.text,
+        fontFamily: config.fontFamily,
+        fontSize: config.fontSize,
+        fill: config.fill,
+        stroke: config.stroke,
+        strokeWidth: config.strokeWidth,
+        x: (previewDims.w || 300) / 4,
+        y: (previewDims.h || 300) / 2,
+      },
+    ]
     setOverlays(newOverlays)
     history.set(newOverlays)
     setStickerText('')
   }
 
-  const addTextPreset = (preset: typeof TEXT_PRESETS[0]) => {
-    const newOverlays: CanvasElement[] = [...overlays, { id: `txt-${Date.now()}`, type: 'text' as const, text: preset.label.split(' ').slice(1).join(' ') || preset.label, fontFamily: preset.font, fontSize: preset.size, fill: preset.fill, stroke: preset.stroke, strokeWidth: preset.strokeWidth, x: (previewDims.w || 300) / 4, y: (previewDims.h || 300) / 2 }]
+  const addTextPreset = (preset: (typeof TEXT_PRESETS)[0]) => {
+    const newOverlays: CanvasElement[] = [
+      ...overlays,
+      {
+        id: `txt-${Date.now()}`,
+        type: 'text' as const,
+        text: preset.label.split(' ').slice(1).join(' ') || preset.label,
+        fontFamily: preset.font,
+        fontSize: preset.size,
+        fill: preset.fill,
+        stroke: preset.stroke,
+        strokeWidth: preset.strokeWidth,
+        x: (previewDims.w || 300) / 4,
+        y: (previewDims.h || 300) / 2,
+      },
+    ]
     setOverlays(newOverlays)
     history.set(newOverlays)
   }
 
   const removeOverlay = (id: string) => {
-    const newOverlays = overlays.filter(o => o.id !== id)
+    const newOverlays = overlays.filter((o) => o.id !== id)
     setOverlays(newOverlays)
     history.set(newOverlays)
     if (selectedOverlay === id) setSelectedOverlay(null)
   }
 
-  const selectedOv = overlays.find(o => o.id === selectedOverlay)
+  const selectedOv = overlays.find((o) => o.id === selectedOverlay)
 
   // Sync TextPanel when overlay is selected
   useEffect(() => {
@@ -282,7 +415,9 @@ export default function CollagePage() {
   // Update a property on the selected text element directly without relying on flaky useEffects
   const updateSelectedText = (patch: Partial<CanvasElement>) => {
     if (!selectedOverlay) return
-    setOverlays(prev => prev.map(o => o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o))
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o)),
+    )
   }
 
   const handleUndo = () => {
@@ -299,14 +434,14 @@ export default function CollagePage() {
   useEffect(() => {
     const el = previewRef.current
     if (!el) return
-    const ro = new ResizeObserver(entries => {
+    const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setPreviewDims({ w: entry.contentRect.width, h: entry.contentRect.height })
       }
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // ─── Export ────────────────────────────────────────────────
   const handleExport = async () => {
@@ -393,212 +528,297 @@ export default function CollagePage() {
   // ─── Shared sidebar content ────────────────────────────────
   const sidebarContent = (
     <>
-        {/* Header */}
-        <div className="p-3 lg:p-5 pb-2 lg:pb-3">
-          <div className="hidden lg:flex items-center gap-3 mb-4">
-            <SidebarHeader
-              gradient="from-[#EC4899] to-[#F59E0B]"
-              icon={<Grid className="w-4.5 h-4.5 text-white" />}
-              title="Collage Maker"
-              subtitle="Combine images into one design"
-              onReset={() => { setImages([]); setOverlays([]); history.reset([]) }}
-              className="w-full"
-            />
-          </div>
-          <SidebarTabStrip
-            tabs={SIDE_TABS.map(t => ({ id: t.id, label: t.label, icon: t.icon }))}
-            active={sideTab}
-            onChange={(id) => setSideTab(id as typeof sideTab)}
-            accentColor="#FF6B4A"
+      {/* Header */}
+      <div className="p-3 lg:p-5 pb-2 lg:pb-3">
+        <div className="hidden lg:flex items-center gap-3 mb-4">
+          <SidebarHeader
+            gradient="from-[#EC4899] to-[#F59E0B]"
+            icon={<Grid className="w-4.5 h-4.5 text-white" />}
+            title="Collage Maker"
+            subtitle="Combine images into one design"
+            onReset={() => {
+              setImages([])
+              setOverlays([])
+              history.reset([])
+            }}
+            className="w-full"
           />
         </div>
+        <SidebarTabStrip
+          tabs={SIDE_TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
+          active={sideTab}
+          onChange={(id) => setSideTab(id as typeof sideTab)}
+          accentColor="#FF6B4A"
+        />
+      </div>
 
-        <div className="px-4 lg:px-5 pb-5 space-y-5">
-          {/* ── LAYOUT TAB ── */}
-          {sideTab === 'layout' && (
-            <>
-              {/* Upload */}
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
-                  Images ({images.length}/{layout.cells})
-                </label>
-                <div {...getRootProps()} className={`rounded-xl border-2 border-dashed py-5 flex flex-col items-center cursor-pointer transition-all
+      <div className="px-4 lg:px-5 pb-5 space-y-5">
+        {/* ── LAYOUT TAB ── */}
+        {sideTab === 'layout' && (
+          <>
+            {/* Upload */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+                Images ({images.length}/{layout.cells})
+              </label>
+              <div
+                {...getRootProps()}
+                className={`rounded-xl border-2 border-dashed py-5 flex flex-col items-center cursor-pointer transition-all
                   ${isDragActive ? 'border-[#FF6B4A] bg-[#FF6B4A]/5' : 'border-(--overlay-border) hover:border-(--overlay-border-hover)'}`}
-                >
-                  <input {...getInputProps()} />
-                  <UploadCloud className="w-5 h-5 text-(--text-muted) mb-1.5" />
-                  <p className="text-xs text-(--text-tertiary)">{isDragActive ? 'Drop here' : 'Drop images or click to upload'}</p>
-                </div>
+              >
+                <input {...getInputProps()} />
+                <UploadCloud className="w-5 h-5 text-(--text-muted) mb-1.5" />
+                <p className="text-xs text-(--text-tertiary)">
+                  {isDragActive ? 'Drop here' : 'Drop images or click to upload'}
+                </p>
+              </div>
 
-                {images.length > 0 && (
-                  <div className="grid grid-cols-4 gap-1.5 mt-3">
-                    {images.map((img, idx) => (
-                      <div
-                        key={img.id}
-                        className={`relative aspect-square rounded-lg overflow-hidden group cursor-grab active:cursor-grabbing ${
-                          dragIdx === idx ? 'ring-2 ring-[#FF6B4A] opacity-60' : ''
-                        }`}
-                        draggable
-                        onDragStart={() => handleDragStart(idx)}
-                        onDragOver={(e) => handleDragOver(e, idx)}
-                        onDragEnd={handleDragEnd}
-                      >
-                        <img src={img.url} alt={`Uploaded image ${idx + 1}`} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
-                          <GripVertical className="w-3 h-3 text-white/60" />
-                          <button onClick={() => removeImage(img.id)} className="cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5 text-white" />
-                          </button>
-                        </div>
-                        <span className="absolute top-1 left-1 text-[9px] font-bold text-white bg-black/50 px-1 rounded">{idx + 1}</span>
+              {images.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5 mt-3">
+                  {images.map((img, idx) => (
+                    <div
+                      key={img.id}
+                      className={`relative aspect-square rounded-lg overflow-hidden group cursor-grab active:cursor-grabbing ${
+                        dragIdx === idx ? 'ring-2 ring-[#FF6B4A] opacity-60' : ''
+                      }`}
+                      draggable
+                      onDragStart={() => handleDragStart(idx)}
+                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <Image
+                        unoptimized
+                        src={img.url}
+                        alt={`Uploaded image ${idx + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                        <GripVertical className="w-3 h-3 text-white/60" />
+                        <button onClick={() => removeImage(img.id)} className="cursor-pointer">
+                          <Trash2 className="w-3.5 h-3.5 text-white" />
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Layout */}
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Layout</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {LAYOUTS.map(l => (
-                    <button
-                      key={l.id}
-                      onClick={() => { setLayout(l); setImages(prev => prev.slice(0, l.cells)) }}
-                      className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${
-                        layout.id === l.id
-                          ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
-                      }`}
-                    >
-                      <span className="text-base block">{l.emoji}</span>
-                      <span className="text-[9px] font-medium">{l.label}</span>
-                    </button>
+                      <span className="absolute top-1 left-1 text-[9px] font-bold text-white bg-black/50 px-1 rounded">
+                        {idx + 1}
+                      </span>
+                    </div>
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
 
-              {/* Output size */}
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Output Size</label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {OUTPUT_SIZES.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => setOutputSize(s)}
-                      className={`py-2 rounded-lg text-center transition-all cursor-pointer ${
-                        outputSize.id === s.id
-                          ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
-                          : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
-                      }`}
-                    >
-                      <span className="text-[10px] font-semibold block">{s.label}</span>
-                      <span className="text-[8px] opacity-60">{s.desc}</span>
-                    </button>
-                  ))}
-                </div>
+            {/* Layout */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+                Layout
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {LAYOUTS.map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => {
+                      setLayout(l)
+                      setImages((prev) => prev.slice(0, l.cells))
+                    }}
+                    className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${
+                      layout.id === l.id
+                        ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
+                        : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
+                    }`}
+                  >
+                    <span className="text-base block">{l.emoji}</span>
+                    <span className="text-[9px] font-medium">{l.label}</span>
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Background solid */}
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Background</label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {BG_COLORS.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => { setBgColor(color); setBgGradient(null) }}
-                      className={`aspect-square rounded-lg border-2 transition-all cursor-pointer ${
-                        bgColor === color && !bgGradient ? 'border-[#FF6B4A] scale-110' : 'border-(--overlay-border)'
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <input type="color" value={bgColor} onChange={e => { setBgColor(e.target.value); setBgGradient(null) }} className="w-7 h-7 rounded cursor-pointer border border-(--overlay-border)" />
-                  <span className="text-xs text-(--text-muted) font-mono uppercase">{bgGradient ? bgGradient.label : bgColor}</span>
-                </div>
+            {/* Output size */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+                Output Size
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {OUTPUT_SIZES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setOutputSize(s)}
+                    className={`py-2 rounded-lg text-center transition-all cursor-pointer ${
+                      outputSize.id === s.id
+                        ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20'
+                        : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'
+                    }`}
+                  >
+                    <span className="text-[10px] font-semibold block">{s.label}</span>
+                    <span className="text-[8px] opacity-60">{s.desc}</span>
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Gradients */}
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Gradients</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {BG_GRADIENTS.map(g => (
-                    <button
-                      key={g.id}
-                      onClick={() => setBgGradient(g)}
-                      className={`h-10 rounded-lg border-2 transition-all cursor-pointer ${
-                        bgGradient?.id === g.id ? 'border-[#FF6B4A] scale-105' : 'border-(--overlay-border)'
-                      }`}
-                      style={{ background: g.css }}
-                      title={g.label}
-                    />
-                  ))}
-                </div>
+            {/* Background solid */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+                Background
+              </label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {BG_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      setBgColor(color)
+                      setBgGradient(null)
+                    }}
+                    className={`aspect-square rounded-lg border-2 transition-all cursor-pointer ${
+                      bgColor === color && !bgGradient
+                        ? 'border-[#FF6B4A] scale-110'
+                        : 'border-(--overlay-border)'
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
               </div>
-
-              {/* Spacing */}
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-1 block">
-                  Padding: {padding}px
-                </label>
-                <input type="range" min="0" max="40" value={padding} onChange={e => setPadding(Number(e.target.value))}
-                  className="w-full" style={{ background: `linear-gradient(to right, #FF6B4A ${padding * 2.5}%, rgba(255,255,255,0.06) ${padding * 2.5}%)` }}
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="color"
+                  value={bgColor}
+                  onChange={(e) => {
+                    setBgColor(e.target.value)
+                    setBgGradient(null)
+                  }}
+                  className="w-7 h-7 rounded cursor-pointer border border-(--overlay-border)"
                 />
+                <span className="text-xs text-(--text-muted) font-mono uppercase">
+                  {bgGradient ? bgGradient.label : bgColor}
+                </span>
               </div>
+            </div>
 
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-1 block">
-                  Corners: {borderRadius}px
-                </label>
-                <input type="range" min="0" max="40" value={borderRadius} onChange={e => setBorderRadius(Number(e.target.value))}
-                  className="w-full" style={{ background: `linear-gradient(to right, #FF6B4A ${borderRadius * 2.5}%, rgba(255,255,255,0.06) ${borderRadius * 2.5}%)` }}
-                />
+            {/* Gradients */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+                Gradients
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {BG_GRADIENTS.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => setBgGradient(g)}
+                    className={`h-10 rounded-lg border-2 transition-all cursor-pointer ${
+                      bgGradient?.id === g.id
+                        ? 'border-[#FF6B4A] scale-105'
+                        : 'border-(--overlay-border)'
+                    }`}
+                    style={{ background: g.css }}
+                    title={g.label}
+                  />
+                ))}
               </div>
-            </>
-          )}
+            </div>
 
-          {/* ── TEXT TAB ── */}
-          {sideTab === 'text' && (
-            <TextPanel
-              text={stickerText}
-              onTextChange={v => { setStickerText(v); updateSelectedText({ text: v }) }}
-              fontFamily={fontFamily}
-              onFontChange={v => { setFontFamily(v); updateSelectedText({ fontFamily: v }) }}
-              fontSize={fontSize}
-              onSizeChange={v => { setFontSize(v); updateSelectedText({ fontSize: v }) }}
-              fillColor={textColor}
-              onFillChange={v => { setTextColor(v); updateSelectedText({ fill: v }) }}
-              strokeColor={textStroke}
-              onStrokeChange={v => { setTextStroke(v); updateSelectedText({ stroke: v }) }}
-              strokeWidth={textStrokeWidth}
-              onStrokeWidthChange={v => { setTextStrokeWidth(v); updateSelectedText({ strokeWidth: v }) }}
-              onAddText={addTextOverlay}
-              onAddPreset={addTextPreset}
-              selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined}
-            />
-          )}
+            {/* Spacing */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-1 block">
+                Padding: {padding}px
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="40"
+                value={padding}
+                onChange={(e) => setPadding(Number(e.target.value))}
+                className="w-full"
+                style={{
+                  background: `linear-gradient(to right, #FF6B4A ${padding * 2.5}%, rgba(255,255,255,0.06) ${padding * 2.5}%)`,
+                }}
+              />
+            </div>
 
-          {/* ── ASSETS TAB ── */}
-          {sideTab === 'assets' && (
-            <AssetPanel onAddAsset={addAssetOverlay} />
-          )}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-1 block">
+                Corners: {borderRadius}px
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="40"
+                value={borderRadius}
+                onChange={(e) => setBorderRadius(Number(e.target.value))}
+                className="w-full"
+                style={{
+                  background: `linear-gradient(to right, #FF6B4A ${borderRadius * 2.5}%, rgba(255,255,255,0.06) ${borderRadius * 2.5}%)`,
+                }}
+              />
+            </div>
+          </>
+        )}
 
-          {/* Overlay list — shared component */}
-          <OverlayList
-            overlays={overlays}
-            selectedId={selectedOverlay}
-            onSelect={setSelectedOverlay}
-            onRemove={removeOverlay}
+        {/* ── TEXT TAB ── */}
+        {sideTab === 'text' && (
+          <TextPanel
+            text={stickerText}
+            onTextChange={(v) => {
+              setStickerText(v)
+              updateSelectedText({ text: v })
+            }}
+            fontFamily={fontFamily}
+            onFontChange={(v) => {
+              setFontFamily(v)
+              updateSelectedText({ fontFamily: v })
+            }}
+            fontSize={fontSize}
+            onSizeChange={(v) => {
+              setFontSize(v)
+              updateSelectedText({ fontSize: v })
+            }}
+            fillColor={textColor}
+            onFillChange={(v) => {
+              setTextColor(v)
+              updateSelectedText({ fill: v })
+            }}
+            strokeColor={textStroke}
+            onStrokeChange={(v) => {
+              setTextStroke(v)
+              updateSelectedText({ stroke: v })
+            }}
+            strokeWidth={textStrokeWidth}
+            onStrokeWidthChange={(v) => {
+              setTextStrokeWidth(v)
+              updateSelectedText({ strokeWidth: v })
+            }}
+            onAddText={addTextOverlay}
+            onAddPreset={addTextPreset}
+            selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined}
           />
+        )}
 
-          <div className="space-y-2 pt-2">
-            <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary)" onClick={() => { setImages([]); setOverlays([]); setSelectedOverlay(null) }}>
-              <RotateCcw className="w-4 h-4" /> Reset All
-            </Button>
-          </div>
+        {/* ── ASSETS TAB ── */}
+        {sideTab === 'assets' && <AssetPanel onAddAsset={addAssetOverlay} />}
+
+        {/* Overlay list — shared component */}
+        <OverlayList
+          overlays={overlays}
+          selectedId={selectedOverlay}
+          onSelect={setSelectedOverlay}
+          onRemove={removeOverlay}
+        />
+
+        <div className="space-y-2 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-(--text-tertiary)"
+            onClick={() => {
+              setImages([])
+              setOverlays([])
+              setSelectedOverlay(null)
+            }}
+          >
+            <RotateCcw className="w-4 h-4" /> Reset All
+          </Button>
         </div>
+      </div>
     </>
   )
 
@@ -612,14 +832,20 @@ export default function CollagePage() {
       {/* ═══ MAIN AREA — Preview ═══ */}
       <div
         className="flex-1 flex flex-col p-2 lg:p-8 pb-52 lg:pb-8 bg-(--canvas-bg) relative"
-        onClick={() => { setSelectedOverlay(null); setShowExport(false) }}
+        onClick={() => {
+          setSelectedOverlay(null)
+          setShowExport(false)
+        }}
       >
         {/* Export Controls */}
-        <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
-          <button 
+        <div
+          className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
             title="Export"
             disabled={images.length === 0}
-            onClick={() => images.length > 0 && setShowExport(!showExport)} 
+            onClick={() => images.length > 0 && setShowExport(!showExport)}
             className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${images.length === 0 ? 'opacity-40 cursor-not-allowed bg-(--panel-bg) border-(--overlay-border) text-(--text-muted)' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-(--panel-bg) border-(--overlay-border) text-(--text-secondary) hover:bg-(--card-bg-hover) cursor-pointer'}`}
           >
             <Download className="w-4 h-4" /> Export
@@ -642,120 +868,178 @@ export default function CollagePage() {
         <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
           {/* Undo/Redo */}
           <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
-            <button title="Undo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
-            <button title="Redo" onClick={(e) => { e.stopPropagation(); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+            <button
+              title="Undo"
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              title="Redo"
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
           </div>
-          
+
           {/* Zoom */}
           <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
-            <button onClick={(e) => { e.stopPropagation(); setZoom(Math.min(zoom + 0.1, 3)) }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Plus className="w-4 h-4" /></button>
-            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">{Math.round(zoom * 100)}%</div>
-            <button onClick={(e) => { e.stopPropagation(); setZoom(Math.max(zoom - 0.1, 0.5)) }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><div className="w-3 h-0.5 bg-current rounded-full" /></button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setZoom(Math.min(zoom + 0.1, 3))
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">
+              {Math.round(zoom * 100)}%
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setZoom(Math.max(zoom - 0.1, 0.5))
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <div className="w-3 h-0.5 bg-current rounded-full" />
+            </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-auto rounded-xl">
-          <div 
-            style={{ 
-              width: `${Math.max(100, zoom * 100)}%`, 
-              height: `${Math.max(100, zoom * 100)}%`, 
-              display: 'flex', 
+          <div
+            style={{
+              width: `${Math.max(100, zoom * 100)}%`,
+              height: `${Math.max(100, zoom * 100)}%`,
+              display: 'flex',
               minWidth: '100%',
-              minHeight: '100%' 
+              minHeight: '100%',
             }}
           >
-          <div 
-            className="w-full h-full flex items-center justify-center p-4 origin-top-left transition-transform duration-200"
-            style={{ transform: `scale(${zoom})`, width: `${(1 / zoom) * 100}%`, height: `${(1 / zoom) * 100}%` }}
-          >
             <div
-              ref={previewRef}
-              className="relative shadow-2xl overflow-hidden shrink-0"
+              className="w-full h-full flex items-center justify-center p-4 origin-top-left transition-transform duration-200"
               style={{
-                width: `min(80vw, ${previewMaxW}px)`,
-                height: `min(80vh, ${previewMaxH}px)`,
-                background: bgGradient ? bgGradient.css : bgColor,
-                borderRadius: `${borderRadius}px`,
-                aspectRatio: `${outputSize.w} / ${outputSize.h}`,
+                transform: `scale(${zoom})`,
+                width: `${(1 / zoom) * 100}%`,
+                height: `${(1 / zoom) * 100}%`,
               }}
             >
-          {images.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)">
-              <Grid className="w-12 h-12 mb-3 opacity-30" />
-              <p className="text-sm font-medium">Upload images to start</p>
-              <p className="text-xs opacity-50 mt-1">Select a layout and add {layout.cells} images</p>
-            </div>
-          ) : (
-            layout.positions(600, 600 / previewAspect * (outputSize.h / outputSize.w) * previewAspect, padding).map((pos, i) => {
-              const refW = 600
-              const refH = 600 / previewAspect * (outputSize.h / outputSize.w) * previewAspect
-              const img = images[i]
-              return (
-                <div
-                  key={i}
-                  className="absolute overflow-hidden"
-                  style={{
-                    left: `${(pos.x / refW) * 100}%`,
-                    top: `${(pos.y / refH) * 100}%`,
-                    width: `${(pos.w / refW) * 100}%`,
-                    height: `${(pos.h / refH) * 100}%`,
-                    borderRadius: `${borderRadius * 0.6}px`,
-                    backgroundColor: img ? undefined : 'rgba(255,255,255,0.03)',
-                    border: img ? undefined : '2px dashed rgba(255,255,255,0.06)',
-                  }}
-                >
-                  {img ? (
-                    <img src={img.url} alt={`Collage cell ${i + 1}`} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-(--text-muted) text-xs">
-                      {i + 1}
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          )}
+              <div
+                ref={previewRef}
+                className="relative shadow-2xl overflow-hidden shrink-0"
+                style={{
+                  width: `min(80vw, ${previewMaxW}px)`,
+                  height: `min(80vh, ${previewMaxH}px)`,
+                  background: bgGradient ? bgGradient.css : bgColor,
+                  borderRadius: `${borderRadius}px`,
+                  aspectRatio: `${outputSize.w} / ${outputSize.h}`,
+                }}
+              >
+                {images.length === 0 ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)">
+                    <Grid className="w-12 h-12 mb-3 opacity-30" />
+                    <p className="text-sm font-medium">Upload images to start</p>
+                    <p className="text-xs opacity-50 mt-1">
+                      Select a layout and add {layout.cells} images
+                    </p>
+                  </div>
+                ) : (
+                  layout
+                    .positions(
+                      600,
+                      (600 / previewAspect) * (outputSize.h / outputSize.w) * previewAspect,
+                      padding,
+                    )
+                    .map((pos, i) => {
+                      const refW = 600
+                      const refH =
+                        (600 / previewAspect) * (outputSize.h / outputSize.w) * previewAspect
+                      const img = images[i]
+                      return (
+                        <div
+                          key={i}
+                          className="absolute overflow-hidden"
+                          style={{
+                            left: `${(pos.x / refW) * 100}%`,
+                            top: `${(pos.y / refH) * 100}%`,
+                            width: `${(pos.w / refW) * 100}%`,
+                            height: `${(pos.h / refH) * 100}%`,
+                            borderRadius: `${borderRadius * 0.6}px`,
+                            backgroundColor: img ? undefined : 'rgba(255,255,255,0.03)',
+                            border: img ? undefined : '2px dashed rgba(255,255,255,0.06)',
+                          }}
+                        >
+                          {img ? (
+                            <Image
+                              unoptimized
+                              src={img.url}
+                              alt={`Collage cell ${i + 1}`}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-full text-(--text-muted) text-xs">
+                              {i + 1}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                )}
 
-          {/* Konva overlay layer for text/assets */}
-          {previewDims.w > 0 && previewDims.h > 0 && (
-            <OverlayCanvas
-              ref={overlayRef}
-              elements={overlays}
-              setElements={setOverlays}
-              selectedId={selectedOverlay}
-              setSelectedId={setSelectedOverlay}
-              width={previewDims.w}
-              height={previewDims.h}
-            />
-          )}
+                {/* Konva overlay layer for text/assets */}
+                {previewDims.w > 0 && previewDims.h > 0 && (
+                  <OverlayCanvas
+                    ref={overlayRef}
+                    elements={overlays}
+                    setElements={setOverlays}
+                    selectedId={selectedOverlay}
+                    setSelectedId={setSelectedOverlay}
+                    width={previewDims.w}
+                    height={previewDims.h}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      </div>
-      </div>
-    </div>
 
       {/* ═══ MOBILE: Floating export button ═══ */}
       {images.length > 0 && (
         <div className="lg:hidden fixed bottom-[200px] md:bottom-[140px] left-1/2 -translate-x-1/2 z-52">
-          <button onClick={handleExport} disabled={isExporting}
-            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF6B4A] text-white font-semibold text-sm shadow-[0_4px_24px_rgba(255,107,74,0.4)] active:scale-95 transition-all touch-manipulation disabled:opacity-50">
-            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF6B4A] text-white font-semibold text-sm shadow-[0_4px_24px_rgba(255,107,74,0.4)] active:scale-95 transition-all touch-manipulation disabled:opacity-50"
+          >
+            {isExporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
             Export
           </button>
         </div>
       )}
 
       {/* ═══ MOBILE BOTTOM SHEET ═══ */}
-      <CollageMobileSheet>
-        {sidebarContent}
-      </CollageMobileSheet>
+      <CollageMobileSheet>{sidebarContent}</CollageMobileSheet>
     </div>
   )
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image()
+    const img = new window.Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = reject
@@ -774,7 +1058,10 @@ function CollageMobileSheet({ children }: { children: React.ReactNode }) {
       const delta = dragY.current - ev.clientY
       if (Math.abs(delta) > 30) setExpanded(delta > 0)
     }
-    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp) }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
   }, [])
@@ -782,12 +1069,21 @@ function CollageMobileSheet({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-[51] bg-(--panel-bg) border-t border-(--overlay-border) rounded-t-2xl shadow-[0_-4px_30px_rgba(0,0,0,0.3)] flex flex-col"
-      style={{ height: expanded ? '55vh' : '110px', transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)' }}
+      style={{
+        height: expanded ? '55vh' : '110px',
+        transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
+      }}
     >
-      <div className="shrink-0 flex items-center justify-center py-2.5 cursor-grab active:cursor-grabbing touch-manipulation" onPointerDown={onDragStart} onClick={() => setExpanded(v => !v)}>
+      <div
+        className="shrink-0 flex items-center justify-center py-2.5 cursor-grab active:cursor-grabbing touch-manipulation"
+        onPointerDown={onDragStart}
+        onClick={() => setExpanded((v) => !v)}
+      >
         <div className="w-10 h-1 rounded-full bg-(--text-muted)/30" />
       </div>
-      <div className={`flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'overflow-hidden'}`}>
+      <div
+        className={`flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'overflow-hidden'}`}
+      >
         {children}
       </div>
     </div>

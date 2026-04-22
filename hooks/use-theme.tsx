@@ -1,5 +1,6 @@
 'use client'
 
+import { MotionConfig } from 'motion/react'
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
 type Theme = 'dark' | 'light'
@@ -39,7 +40,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeCtx.Provider value={{ theme, toggle, setTheme }}>
-      {children}
+      <MotionConfig reducedMotion="user">{children}</MotionConfig>
     </ThemeCtx.Provider>
   )
 }

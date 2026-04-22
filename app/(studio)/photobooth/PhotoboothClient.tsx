@@ -3,7 +3,10 @@
 import { AssetPanel } from '@/components/shared/AssetPanel'
 import type { ExportFormat } from '@/components/shared/ExportFormatPanel'
 import { ExportFormatPanel, exportCanvasAs } from '@/components/shared/ExportFormatPanel'
-import OverlayCanvas, { type CanvasElement, type OverlayCanvasHandle } from '@/components/shared/OverlayCanvas'
+import OverlayCanvas, {
+  type CanvasElement,
+  type OverlayCanvasHandle,
+} from '@/components/shared/OverlayCanvas'
 import { SidebarHeader } from '@/components/shared/SidebarHeader'
 import { SidebarTabStrip } from '@/components/shared/SidebarTabStrip'
 import { TextPanel } from '@/components/shared/TextPanel'
@@ -13,23 +16,33 @@ import { AR_CATEGORIES, AR_FILTERS, type ARFilter } from '@/lib/ar-filters'
 import { FILTER_CATEGORIES, IMAGE_FILTERS } from '@/lib/image-filters'
 import { TEXT_PRESETS } from '@/lib/shared-assets'
 import {
-  Camera, CameraIcon,
+  Camera,
+  CameraIcon,
   Download,
   Eye,
   FlipHorizontal2,
   Frame,
-  Grid, Layers, Loader2,
+  Grid,
+  Layers,
+  Loader2,
   Minus,
   Pencil,
   Plus,
   Redo2,
-  RefreshCw, RotateCcw, ScanFace, Settings, Sparkles, Star,
+  RefreshCw,
+  RotateCcw,
+  ScanFace,
+  Settings,
+  Sparkles,
+  Star,
   SwitchCamera,
-  Trash2, Type,
+  Trash2,
+  Type,
   Undo2,
-  X
+  X,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const ARFaceFilter = dynamic(() => import('@/components/shared/ARFaceFilter'), { ssr: false })
@@ -68,6 +81,12 @@ const CSS_FILTER_PREVIEW: Record<string, string> = {
 
 type SideTab = 'capture' | 'filters' | 'text' | 'assets' | 'adjust' | 'frames'
 
+async function fetchCloudFrames() {
+  const res = await fetch(`/api/frames?t=${Date.now()}`)
+  if (!res.ok) throw new Error('Failed to fetch frames')
+  return res.json()
+}
+
 export default function PhotoboothPage() {
   // Camera
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -91,7 +110,9 @@ export default function PhotoboothPage() {
   // Custom frame templates
   const [customFrames, setCustomFrames] = useState<FrameTemplate[]>([])
   const [activeCustomFrame, setActiveCustomFrame] = useState<FrameTemplate | null>(null)
-  const [slotOffsets, setSlotOffsets] = useState<Record<number, { ox: number; oy: number; scale: number }>>({})
+  const [slotOffsets, setSlotOffsets] = useState<
+    Record<number, { ox: number; oy: number; scale: number }>
+  >({})
 
   // Frame Editor modal
   const [showFrameEditor, setShowFrameEditor] = useState(false)
@@ -143,24 +164,32 @@ export default function PhotoboothPage() {
   const { toast } = useToast()
 
   // ─── Camera ────────────────────────────────────────────────
-  const startCamera = useCallback(async (facing?: 'user' | 'environment') => {
-    try {
-      setCameraError(null)
-      streamRef.current?.getTracks().forEach(t => t.stop())
-      const mode = facing || facingMode
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: mode },
-        audio: false,
-      })
-      streamRef.current = stream
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
-      setCameraActive(true)
-      if (facing) setFacingMode(facing)
-    } catch { setCameraError('Could not access camera. Please allow permissions.') }
-  }, [facingMode])
+  const startCamera = useCallback(
+    async (facing?: 'user' | 'environment') => {
+      try {
+        setCameraError(null)
+        streamRef.current?.getTracks().forEach((t) => t.stop())
+        const mode = facing || facingMode
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: mode },
+          audio: false,
+        })
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+        setCameraActive(true)
+        if (facing) setFacingMode(facing)
+      } catch {
+        setCameraError('Could not access camera. Please allow permissions.')
+      }
+    },
+    [facingMode],
+  )
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     setCameraActive(false)
@@ -172,7 +201,12 @@ export default function PhotoboothPage() {
     startCamera(next)
   }, [facingMode, startCamera])
 
-  useEffect(() => () => { streamRef.current?.getTracks().forEach(t => t.stop()) }, [])
+  useEffect(
+    () => () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    },
+    [],
+  )
 
   // Load custom frames from localStorage + Supabase cloud
   useEffect(() => {
@@ -180,13 +214,14 @@ export default function PhotoboothPage() {
     let localFrames: FrameTemplate[] = []
     try {
       localFrames = JSON.parse(localStorage.getItem('sticker-studio-frame-templates') || '[]')
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setCustomFrames(localFrames)
 
     // Cloud frames
-    fetch(`/api/frames?t=${Date.now()}`)
-      .then(r => r.json())
-      .then(data => {
+    fetchCloudFrames()
+      .then((data) => {
         const cloudFrames: FrameTemplate[] = (data.frames || []).map((f: any) => ({
           id: f.id,
           name: f.name,
@@ -196,18 +231,18 @@ export default function PhotoboothPage() {
           frameDataUrl: f.frameUrl || '',
           createdAt: f.createdAt,
           isCloud: true,
-          _bucketPath: f._bucketPath || `frames/${f.id}`
+          _bucketPath: f._bucketPath || `frames/${f.id}`,
         }))
         // Merge: cloud wins when IDs overlap (cloud is source of truth after save-to-cloud)
-        const cloudMap = new Map(cloudFrames.map(f => [f.id, f]))
-        const localOnlyFrames = localFrames.filter(f => !cloudMap.has(f.id))
+        const cloudMap = new Map(cloudFrames.map((f) => [f.id, f]))
+        const localOnlyFrames = localFrames.filter((f) => !cloudMap.has(f.id))
         const merged = [...localOnlyFrames, ...cloudFrames]
         setCustomFrames(merged)
-        
+
         // Auto select if redirected from Frame Editor
         const autoSelectId = localStorage.getItem('sticker-studio-auto-select-frame')
         if (autoSelectId) {
-          const frameToSelect = merged.find(f => f.id === autoSelectId)
+          const frameToSelect = merged.find((f) => f.id === autoSelectId)
           if (frameToSelect) {
             handleFrameSwitch(frameToSelect)
             setSideTab('frames')
@@ -215,13 +250,13 @@ export default function PhotoboothPage() {
           }
         }
       })
-      .catch(err => {
+      .catch((err) => {
         console.warn('Failed to load cloud frames:', err)
         // If cloud fails, still process local and auto-select
         setCustomFrames(localFrames)
         const autoSelectId = localStorage.getItem('sticker-studio-auto-select-frame')
         if (autoSelectId) {
-          const frameToSelect = localFrames.find(f => f.id === autoSelectId)
+          const frameToSelect = localFrames.find((f) => f.id === autoSelectId)
           if (frameToSelect) {
             handleFrameSwitch(frameToSelect)
             setSideTab('frames')
@@ -235,7 +270,7 @@ export default function PhotoboothPage() {
   const handleDeleteFrame = async (f: FrameTemplate, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm(`Are you sure you want to delete "${f.name}"?`)) return
-    
+
     // If cloud frame, try cloud delete FIRST before touching local state
     if ((f as any).isCloud) {
       try {
@@ -251,20 +286,25 @@ export default function PhotoboothPage() {
         return // Don't remove from local UI — it would reappear on reload anyway
       }
     }
-    
+
     // Remove from localStorage
     try {
-      const stored: FrameTemplate[] = JSON.parse(localStorage.getItem('sticker-studio-frame-templates') || '[]')
-      localStorage.setItem('sticker-studio-frame-templates', JSON.stringify(stored.filter(frame => frame.id !== f.id)))
+      const stored: FrameTemplate[] = JSON.parse(
+        localStorage.getItem('sticker-studio-frame-templates') || '[]',
+      )
+      localStorage.setItem(
+        'sticker-studio-frame-templates',
+        JSON.stringify(stored.filter((frame) => frame.id !== f.id)),
+      )
     } catch {}
-    
+
     // Remove from UI state
-    setCustomFrames(prev => prev.filter(frame => frame.id !== f.id))
+    setCustomFrames((prev) => prev.filter((frame) => frame.id !== f.id))
     if (activeCustomFrame?.id === f.id) {
       setActiveCustomFrame(null)
       setStripTemplate(STRIP_TEMPLATES[0])
     }
-    
+
     toast(`Frame "${f.name}" deleted`, 'success')
   }
 
@@ -275,13 +315,14 @@ export default function PhotoboothPage() {
       const arCanvas = arRef.current.captureFrame()
       if (!arCanvas) return null
       const out = document.createElement('canvas')
-      out.width = arCanvas.width; out.height = arCanvas.height
+      out.width = arCanvas.width
+      out.height = arCanvas.height
       const ctx = out.getContext('2d')!
       ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`
       ctx.drawImage(arCanvas, 0, 0)
       ctx.filter = 'none'
       if (activeFilter !== 'none') {
-        const f = IMAGE_FILTERS.find(fl => fl.id === activeFilter)
+        const f = IMAGE_FILTERS.find((fl) => fl.id === activeFilter)
         if (f) f.apply(ctx, out)
       }
       return out
@@ -290,37 +331,48 @@ export default function PhotoboothPage() {
     if (!videoRef.current || !cameraActive) return null
     const v = videoRef.current
     const canvas = document.createElement('canvas')
-    canvas.width = v.videoWidth; canvas.height = v.videoHeight
+    canvas.width = v.videoWidth
+    canvas.height = v.videoHeight
     const ctx = canvas.getContext('2d')!
-    if (mirrored) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1) }
+    if (mirrored) {
+      ctx.translate(canvas.width, 0)
+      ctx.scale(-1, 1)
+    }
     ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`
-    ctx.drawImage(v, 0, 0); ctx.filter = 'none'
+    ctx.drawImage(v, 0, 0)
+    ctx.filter = 'none'
     if (activeFilter !== 'none') {
-      const f = IMAGE_FILTERS.find(fl => fl.id === activeFilter)
+      const f = IMAGE_FILTERS.find((fl) => fl.id === activeFilter)
       if (f) f.apply(ctx, canvas)
     }
     return canvas
   }, [arEnabled, cameraActive, mirrored, brightness, contrast, saturation, activeFilter])
 
   const triggerFlash = () => {
-    setShowFlash(true); setTimeout(() => setShowFlash(false), 300)
+    setShowFlash(true)
+    setTimeout(() => setShowFlash(false), 300)
   }
 
   const handleCapture = useCallback(() => {
     if (countdown > 0 || isBursting) return
     const doCapture = () => {
-      playShutterSound(); triggerFlash()
+      playShutterSound()
+      triggerFlash()
       const photo = capturePhoto()
-      if (photo) { setCapturedPhotos(prev => [...prev, photo]); toast('📸 Captured!', 'success') }
+      if (photo) {
+        setCapturedPhotos((prev) => [...prev, photo])
+        toast('📸 Captured!', 'success')
+      }
     }
     const doBurst = async () => {
       setIsBursting(true)
       const photos: HTMLCanvasElement[] = []
       for (let i = 0; i < stripTemplate.slots + 2; i++) {
-        playShutterSound(); triggerFlash()
+        playShutterSound()
+        triggerFlash()
         const photo = capturePhoto()
         if (photo) photos.push(photo)
-        if (i < stripTemplate.slots + 1) await new Promise(r => setTimeout(r, 1500))
+        if (i < stripTemplate.slots + 1) await new Promise((r) => setTimeout(r, 1500))
       }
       setCapturedPhotos(photos)
       setSelectedForReview(photos.map(() => true))
@@ -332,26 +384,44 @@ export default function PhotoboothPage() {
       burstMode ? doBurst() : doCapture()
     } else {
       let remaining = countdownDuration
-      setCountdown(remaining); playBeep()
+      setCountdown(remaining)
+      playBeep()
       const interval = setInterval(() => {
-        remaining--; setCountdown(remaining); if (remaining > 0) playBeep()
-        if (remaining === 0) { clearInterval(interval); setTimeout(() => { burstMode ? doBurst() : doCapture() }, 100) }
+        remaining--
+        setCountdown(remaining)
+        if (remaining > 0) playBeep()
+        if (remaining === 0) {
+          clearInterval(interval)
+          setTimeout(() => {
+            burstMode ? doBurst() : doCapture()
+          }, 100)
+        }
       }, 1000)
     }
-  }, [countdown, isBursting, countdownDuration, capturePhoto, burstMode, stripTemplate.slots, toast])
+  }, [
+    countdown,
+    isBursting,
+    countdownDuration,
+    capturePhoto,
+    burstMode,
+    stripTemplate.slots,
+    toast,
+  ])
 
   // ─── Review mode ───────────────────────────────────────────
   const confirmReview = () => {
     const kept = capturedPhotos.filter((_, i) => selectedForReview[i])
-    setCapturedPhotos(kept); setReviewMode(false)
+    setCapturedPhotos(kept)
+    setReviewMode(false)
     toast(`✅ Kept ${kept.length} photos`, 'success')
   }
 
   const retakePhoto = (index: number) => {
     const photo = capturePhoto()
     if (photo) {
-      playShutterSound(); triggerFlash()
-      setCapturedPhotos(prev => prev.map((p, i) => i === index ? photo : p))
+      playShutterSound()
+      triggerFlash()
+      setCapturedPhotos((prev) => prev.map((p, i) => (i === index ? photo : p)))
       toast('🔄 Photo retaken!', 'success')
     }
   }
@@ -359,19 +429,68 @@ export default function PhotoboothPage() {
   // ─── Overlays (Konva-based) ──────────────────────────────────
   const addAssetOverlay = (src: string) => {
     const pw = previewDims.w || 300
-    setOverlays(prev => [...prev, { id: `ov-${Date.now()}`, type: 'image' as const, src, x: pw / 2 - 30 + Math.random() * 40 - 20, y: pw / 2 - 30, width: 60, height: 60 }])
+    setOverlays((prev) => [
+      ...prev,
+      {
+        id: `ov-${Date.now()}`,
+        type: 'image' as const,
+        src,
+        x: pw / 2 - 30 + Math.random() * 40 - 20,
+        y: pw / 2 - 30,
+        width: 60,
+        height: 60,
+      },
+    ])
   }
-  const addTextOverlay = (config: { text: string; fontFamily: string; fontSize: number; fill: string; stroke: string; strokeWidth: number }) => {
+  const addTextOverlay = (config: {
+    text: string
+    fontFamily: string
+    fontSize: number
+    fill: string
+    stroke: string
+    strokeWidth: number
+  }) => {
     const pw = previewDims.w || 300
-    setOverlays(prev => [...prev, { id: `txt-${Date.now()}`, type: 'text' as const, text: config.text, fontFamily: config.fontFamily, fontSize: config.fontSize, fill: config.fill, stroke: config.stroke, strokeWidth: config.strokeWidth, x: pw / 4, y: previewDims.h ? previewDims.h / 2 : 200 }])
+    setOverlays((prev) => [
+      ...prev,
+      {
+        id: `txt-${Date.now()}`,
+        type: 'text' as const,
+        text: config.text,
+        fontFamily: config.fontFamily,
+        fontSize: config.fontSize,
+        fill: config.fill,
+        stroke: config.stroke,
+        strokeWidth: config.strokeWidth,
+        x: pw / 4,
+        y: previewDims.h ? previewDims.h / 2 : 200,
+      },
+    ])
     setStickerText('')
   }
-  const addTextPreset = (preset: typeof TEXT_PRESETS[0]) => {
+  const addTextPreset = (preset: (typeof TEXT_PRESETS)[0]) => {
     const pw = previewDims.w || 300
-    setOverlays(prev => [...prev, { id: `txt-${Date.now()}`, type: 'text' as const, text: preset.label.split(' ').slice(1).join(' ') || preset.label, fontFamily: preset.font, fontSize: preset.size, fill: preset.fill, stroke: preset.stroke, strokeWidth: preset.strokeWidth, x: pw / 4, y: previewDims.h ? previewDims.h / 2 : 200 }])
+    setOverlays((prev) => [
+      ...prev,
+      {
+        id: `txt-${Date.now()}`,
+        type: 'text' as const,
+        text: preset.label.split(' ').slice(1).join(' ') || preset.label,
+        fontFamily: preset.font,
+        fontSize: preset.size,
+        fill: preset.fill,
+        stroke: preset.stroke,
+        strokeWidth: preset.strokeWidth,
+        x: pw / 4,
+        y: previewDims.h ? previewDims.h / 2 : 200,
+      },
+    ])
   }
-  const removeOverlay = (id: string) => { setOverlays(prev => prev.filter(o => o.id !== id)); if (selectedOverlay === id) setSelectedOverlay(null) }
-  const selectedOv = overlays.find(o => o.id === selectedOverlay)
+  const removeOverlay = (id: string) => {
+    setOverlays((prev) => prev.filter((o) => o.id !== id))
+    if (selectedOverlay === id) setSelectedOverlay(null)
+  }
+  const selectedOv = overlays.find((o) => o.id === selectedOverlay)
 
   // Sync TextPanel controls when selecting a text overlay via sidebar
   const selectOverlayAndSync = (ov: CanvasElement) => {
@@ -406,14 +525,16 @@ export default function PhotoboothPage() {
   // Update a property on the selected text element directly without relying on flaky useEffects
   const updateSelectedText = (patch: Partial<CanvasElement>) => {
     if (!selectedOverlay) return
-    setOverlays(prev => prev.map(o => o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o))
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === selectedOverlay && o.type === 'text' ? { ...o, ...patch } : o)),
+    )
   }
 
   // Track preview container dimensions and handle non-passive wheel events
   useEffect(() => {
     const el = previewRef.current
     if (!el) return
-    const ro = new ResizeObserver(entries => {
+    const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setPreviewDims({ w: entry.contentRect.width, h: entry.contentRect.height })
       }
@@ -432,7 +553,7 @@ export default function PhotoboothPage() {
       ro.disconnect()
       el.removeEventListener('wheel', handleWheel)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // ─── Slot photo drag (custom frame) ────────────────────────
   const [draggingSlot, setDraggingSlot] = useState<number | null>(null)
@@ -440,7 +561,8 @@ export default function PhotoboothPage() {
   const slotDragStart = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
   const getSlotOffset = (i: number) => slotOffsets[i] || { ox: 0, oy: 0, scale: 1 }
   const onSlotDown = (e: React.PointerEvent, slotIdx: number) => {
-    e.stopPropagation(); e.preventDefault()
+    e.stopPropagation()
+    e.preventDefault()
     setDraggingSlot(slotIdx)
     setActiveSlot(slotIdx)
     const off = getSlotOffset(slotIdx)
@@ -454,26 +576,33 @@ export default function PhotoboothPage() {
     const r = previewRef.current.getBoundingClientRect()
     const rawDx = ((e.clientX - startRef.x) / r.width) * 100
     const rawDy = ((e.clientY - startRef.y) / r.height) * 100
-    
+
     // Reverse the visual rotation for dragging behavior
     const slot = activeCustomFrame!.slots[idx]
-    const rAngle = (slot.rotation || 0) * Math.PI / 180
+    const rAngle = ((slot.rotation || 0) * Math.PI) / 180
     const dx = rawDx * Math.cos(-rAngle) - rawDy * Math.sin(-rAngle)
     const dy = rawDx * Math.sin(-rAngle) + rawDy * Math.cos(-rAngle)
 
-    const startOx = startRef.ox, startOy = startRef.oy
-    setSlotOffsets(prev => {
+    const startOx = startRef.ox,
+      startOy = startRef.oy
+    setSlotOffsets((prev) => {
       const cur = prev[idx] || { ox: 0, oy: 0, scale: 1 }
       return { ...prev, [idx]: { ...cur, ox: startOx + dx, oy: startOy + dy } }
     })
   }
-  const onSlotUp = () => { setDraggingSlot(null); slotDragStart.current = null }
-  
+  const onSlotUp = () => {
+    setDraggingSlot(null)
+    slotDragStart.current = null
+  }
+
   const adjustZoom = (slotIdx: number, delta: number) => {
-    setSlotOffsets(prev => {
+    setSlotOffsets((prev) => {
       const cur = prev[slotIdx] || { ox: 0, oy: 0, scale: 1 }
       // Snap slightly closer to 100% and limit min/max
-      return { ...prev, [slotIdx]: { ...cur, scale: Math.max(0.5, Math.min(3, cur.scale + delta)) } }
+      return {
+        ...prev,
+        [slotIdx]: { ...cur, scale: Math.max(0.5, Math.min(3, cur.scale + delta)) },
+      }
     })
   }
 
@@ -487,8 +616,11 @@ export default function PhotoboothPage() {
 
       if (activeCustomFrame) {
         // Custom frame export
-        const W = activeCustomFrame.width, H = activeCustomFrame.height
-        canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H
+        const W = activeCustomFrame.width,
+          H = activeCustomFrame.height
+        canvas = document.createElement('canvas')
+        canvas.width = W
+        canvas.height = H
         ctx = canvas.getContext('2d')!
         // White background
         ctx.fillStyle = '#ffffff'
@@ -515,7 +647,8 @@ export default function PhotoboothPage() {
           ctx.clip()
           // Cover crop with user offset + scale
           const baseScale = Math.max(slot.w / photo.width, slot.h / photo.height) * off.scale
-          const dw = photo.width * baseScale, dh = photo.height * baseScale
+          const dw = photo.width * baseScale,
+            dh = photo.height * baseScale
           const dx = slot.x + (slot.w - dw) / 2 + (off.ox / 100) * slot.w
           const dy = slot.y + (slot.h - dh) / 2 + (off.oy / 100) * slot.h
           ctx.drawImage(photo, 0, 0, photo.width, photo.height, dx, dy, dw, dh)
@@ -526,11 +659,13 @@ export default function PhotoboothPage() {
           const frameImg = await loadImage(activeCustomFrame.frameDataUrl)
           ctx.drawImage(frameImg, 0, 0, W, H)
         }
-
       } else {
         // Standard strip export
-        const W = 600, H = stripTemplate.id === 'polaroid' ? 720 : stripTemplate.id === 'grid2x2' ? 600 : 1600
-        canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H
+        const W = 600,
+          H = stripTemplate.id === 'polaroid' ? 720 : stripTemplate.id === 'grid2x2' ? 600 : 1600
+        canvas = document.createElement('canvas')
+        canvas.width = W
+        canvas.height = H
         ctx = canvas.getContext('2d')!
         stripTemplate.render(ctx, capturedPhotos, W, H, stripBg)
       }
@@ -539,26 +674,35 @@ export default function PhotoboothPage() {
         const overlayDataUrl = await overlayRef.current.exportOverlay(canvas.width, canvas.height)
         if (overlayDataUrl) {
           const overlayImg = await loadImage(overlayDataUrl)
-          const W = canvas.width, H = canvas.height
+          const W = canvas.width,
+            H = canvas.height
           ctx.drawImage(overlayImg, 0, 0, W, H)
         }
       }
       // Curtain reveal
       setShowCurtain(true)
-      await new Promise(r => setTimeout(r, 1800))
+      await new Promise((r) => setTimeout(r, 1800))
       // Sanitize filename to ensure Windows correctly reads the extension
-      const safeName = (activeCustomFrame ? activeCustomFrame.name : stripTemplate.id).replace(/[^a-zA-Z0-9_-]/g, '_')
+      const safeName = (activeCustomFrame ? activeCustomFrame.name : stripTemplate.id).replace(
+        /[^a-zA-Z0-9_-]/g,
+        '_',
+      )
       await exportCanvasAs(canvas, exportFormat, `photobooth_${safeName}`)
       toast(`🎉 Exported as ${exportFormat.toUpperCase()}!`, 'success')
       setTimeout(() => setShowCurtain(false), 500)
-    } catch (err) { console.error(err); toast('Export failed', 'error'); setShowCurtain(false) }
-    finally { setIsExporting(false) }
+    } catch (err) {
+      console.error(err)
+      toast('Export failed', 'error')
+      setShowCurtain(false)
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const toggleARFilter = useCallback((filter: ARFilter) => {
-    setActiveARFilters(prev => {
-      const exists = prev.find(f => f.id === filter.id)
-      if (exists) return prev.filter(f => f.id !== filter.id)
+    setActiveARFilters((prev) => {
+      const exists = prev.find((f) => f.id === filter.id)
+      if (exists) return prev.filter((f) => f.id !== filter.id)
       return [...prev, filter]
     })
   }, [])
@@ -568,11 +712,11 @@ export default function PhotoboothPage() {
       const currentPhoto = capturePhoto()
       if (currentPhoto) setSwitchToBg(currentPhoto.toDataURL())
     }
-    
+
     setIsSwitching(true)
     if (cameraActive) stopCamera()
     setArEnabled(true)
-    
+
     setTimeout(() => {
       setIsSwitching(false)
       setTimeout(() => setSwitchToBg(null), 300)
@@ -589,7 +733,7 @@ export default function PhotoboothPage() {
     if (arRef.current) arRef.current.stop()
     setArEnabled(false)
     setActiveARFilters([])
-    
+
     // Resume normal camera smoothly
     setTimeout(async () => {
       await startCamera(facingMode)
@@ -603,23 +747,28 @@ export default function PhotoboothPage() {
     if (arEnabled && activeARFilters.length === 0) disableAR()
   }, [arEnabled, activeARFilters.length, disableAR])
 
-  const handleFrameSwitch = useCallback((customFrame: FrameTemplate | null, stripTemplateTarget: StripTemplate | null = null) => {
-    setIsSwitchingFrame(true)
-    if (customFrame) {
-      setActiveCustomFrame(customFrame)
-    } else if (stripTemplateTarget) {
-      setActiveCustomFrame(null)
-      setStripTemplate(stripTemplateTarget)
-    }
-  }, [])
+  const handleFrameSwitch = useCallback(
+    (customFrame: FrameTemplate | null, stripTemplateTarget: StripTemplate | null = null) => {
+      setIsSwitchingFrame(true)
+      if (customFrame) {
+        setActiveCustomFrame(customFrame)
+      } else if (stripTemplateTarget) {
+        setActiveCustomFrame(null)
+        setStripTemplate(stripTemplateTarget)
+      }
+    },
+    [],
+  )
 
   const SIDE = [
     { id: 'capture' as SideTab, label: 'Capture', icon: <Camera className="w-3.5 h-3.5" /> },
-    { 
-      id: 'frames' as SideTab, 
-      label: 'Frames', 
+    {
+      id: 'frames' as SideTab,
+      label: 'Frames',
       icon: <Frame className="w-3.5 h-3.5" />,
-      badge: <Star className="w-3 h-3 fill-yellow-400 text-yellow-500 drop-shadow-md animate-pulse transform rotate-12" />
+      badge: (
+        <Star className="w-3 h-3 fill-yellow-400 text-yellow-500 drop-shadow-md animate-pulse transform rotate-12" />
+      ),
     },
     { id: 'filters' as SideTab, label: 'Filters', icon: <Sparkles className="w-3.5 h-3.5" /> },
     { id: 'text' as SideTab, label: 'Text', icon: <Type className="w-3.5 h-3.5" /> },
@@ -637,12 +786,16 @@ export default function PhotoboothPage() {
             icon={<Camera className="w-4.5 h-4.5 text-white" />}
             title="Photobooth"
             subtitle="Premium photo strips"
-            onReset={() => { setCapturedPhotos([]); setOverlays([]); stopCamera() }}
+            onReset={() => {
+              setCapturedPhotos([])
+              setOverlays([])
+              stopCamera()
+            }}
             className="w-full"
           />
         </div>
         <SidebarTabStrip
-          tabs={SIDE.map(t => ({ id: t.id, label: t.label, icon: t.icon }))}
+          tabs={SIDE.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
           active={sideTab}
           onChange={(id) => setSideTab(id as typeof sideTab)}
           accentColor="#FF6B4A"
@@ -651,224 +804,549 @@ export default function PhotoboothPage() {
       </div>
 
       <div className="px-4 lg:px-5 pb-5 space-y-4">
-        {sideTab === 'capture' && <>
-          <Sec title="Camera">
-            {!cameraActive && !arEnabled
-              ? <Button onClick={() => startCamera()} className="w-full gap-2"><Camera className="w-4 h-4" /> Start Camera</Button>
-              : <div className="flex gap-2">
-                  <Button onClick={stopCamera} variant="ghost" className="flex-1 gap-1 text-red-400"><X className="w-3.5 h-3.5" /> Stop</Button>
-                  <Button onClick={switchCamera} variant="ghost" className="flex-1 gap-1 text-(--text-secondary)"><SwitchCamera className="w-3.5 h-3.5" /> Flip</Button>
+        {sideTab === 'capture' && (
+          <>
+            <Sec title="Camera">
+              {!cameraActive && !arEnabled ? (
+                <Button onClick={() => startCamera()} className="w-full gap-2">
+                  <Camera className="w-4 h-4" /> Start Camera
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={stopCamera}
+                    variant="ghost"
+                    className="flex-1 gap-1 text-red-400"
+                  >
+                    <X className="w-3.5 h-3.5" /> Stop
+                  </Button>
+                  <Button
+                    onClick={switchCamera}
+                    variant="ghost"
+                    className="flex-1 gap-1 text-(--text-secondary)"
+                  >
+                    <SwitchCamera className="w-3.5 h-3.5" /> Flip
+                  </Button>
                 </div>
-            }
-            {cameraError && <p className="text-xs text-red-400 mt-1">{cameraError}</p>}
-          </Sec>
-          <Sec title="Timer">
-            <div className="flex gap-1.5">
-              {[0, 3, 5, 10].map(t => <button key={t} onClick={() => setCountdownDuration(t)} className={`flex-1 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${countdownDuration === t ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}>{t === 0 ? 'Off' : `${t}s`}</button>)}
-            </div>
-          </Sec>
-          <Sec title="Mode">
-            <div className="flex gap-1.5">
-              <button onClick={() => setBurstMode(false)} className={`flex-1 py-2.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${!burstMode ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}><CameraIcon className="w-3.5 h-3.5" /> Single</button>
-              <button onClick={() => setBurstMode(true)} className={`flex-1 py-2.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${burstMode ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}><Grid className="w-3.5 h-3.5" /> Burst ({stripTemplate.slots + 2})</button>
-            </div>
-          </Sec>
-          <Sec title="Mirror"><button onClick={() => setMirrored(!mirrored)} className={`w-full py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${mirrored ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}><FlipHorizontal2 className="w-3.5 h-3.5" /> {mirrored ? 'Mirrored' : 'Normal'}</button></Sec>
-
-          <div className="border-t border-(--overlay-border) my-2" />
-
-          {/* AR Filters integrated into Capture tab */}
-          <Sec title="AR Categories">
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              {AR_CATEGORIES.map(c => (
-                <button key={c.id} onClick={() => setArFilterCategory(c.id)}
-                  className={`flex-1 min-w-[50px] py-1.5 rounded-lg text-[10px] font-semibold transition-all flex flex-col items-center gap-1 cursor-pointer whitespace-nowrap ${arFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border)'}`}>
-                  <span className="text-sm">{c.emoji}</span>
-                  <span className="text-[9px]">{c.label}</span>
-                </button>
-              ))}
-            </div>
-          </Sec>
-
-          <Sec title="AR Face Filters">
-            <div className="grid grid-cols-3 gap-1.5">
-              {AR_FILTERS.filter(f => f.category === arFilterCategory).map(f => {
-                const isActive = activeARFilters.some(af => af.id === f.id)
-                return (
-                  <button key={f.id} onClick={() => { toggleARFilter(f); if (!arEnabled) enableAR() }}
-                    className={`py-2 px-1 rounded-lg text-center transition-all cursor-pointer ${isActive ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}>
-                    {f.thumbnail ? (
-                      <div className="w-8 h-8 mx-auto mb-1 rounded-full overflow-hidden bg-black/30">
-                        <img src={f.thumbnail} alt={f.label} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <span className="text-lg block mb-0.5">{f.emoji}</span>
-                    )}
-                    <span className="text-[9px] block leading-tight">{f.label}</span>
+              )}
+              {cameraError && <p className="text-xs text-red-400 mt-1">{cameraError}</p>}
+            </Sec>
+            <Sec title="Timer">
+              <div className="flex gap-1.5">
+                {[0, 3, 5, 10].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setCountdownDuration(t)}
+                    className={`flex-1 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${countdownDuration === t ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
+                  >
+                    {t === 0 ? 'Off' : `${t}s`}
                   </button>
-                )
-              })}
-            </div>
-          </Sec>
-
-          {/* Active AR Filters Summary */}
-          {activeARFilters.length > 0 && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">
-                Active AR ({activeARFilters.length})
-              </label>
-              <div className="flex flex-wrap gap-1">
-                {activeARFilters.map(f => (
-                  <span key={f.id} onClick={() => toggleARFilter(f)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#FF6B4A]/10 text-[#FF6B4A] text-[10px] font-semibold cursor-pointer hover:bg-[#FF6B4A]/20 transition-all">
-                    {f.emoji} {f.label} <X className="w-2.5 h-2.5" />
-                  </span>
                 ))}
               </div>
-              <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary) mt-1 h-7 text-[10px]" onClick={() => setActiveARFilters([])}>
-                <RotateCcw className="w-3 h-3 mr-1" /> Clear AR Filters
-              </Button>
-            </div>
-          )}
-        </>}
-
-        {sideTab === 'frames' && <>
-          {/* Built-in Presets */}
-          <Sec title="📦 Built-in Presets">
-            <div className="grid grid-cols-3 gap-1.5">{STRIP_TEMPLATES.map(t => (
-              <button key={t.id} onClick={() => handleFrameSwitch(null, t)}
-                className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${!activeCustomFrame && stripTemplate.id === t.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}>
-                <span className="text-sm block">{t.emoji}</span>
-                <span className="text-[9px]">{t.label}</span>
-              </button>
-            ))}</div>
-          </Sec>
-
-          {/* Background — shown when built-in preset is active */}
-          {!activeCustomFrame && (
-            <Sec title="Background">
-              <div className="grid grid-cols-4 gap-1.5">{STRIP_BACKGROUNDS.map(bg => (
-                <button key={bg.id} onClick={() => setStripBg(bg.id)}
-                  className={`h-9 rounded-lg border-2 transition-all cursor-pointer ${stripBg === bg.id ? 'border-[#FF6B4A] scale-105' : 'border-(--overlay-border)'}`}
-                  style={{ background: bg.css }} title={bg.label} />
-              ))}</div>
             </Sec>
-          )}
+            <Sec title="Mode">
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setBurstMode(false)}
+                  className={`flex-1 py-2.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${!burstMode ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}
+                >
+                  <CameraIcon className="w-3.5 h-3.5" /> Single
+                </button>
+                <button
+                  onClick={() => setBurstMode(true)}
+                  className={`flex-1 py-2.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${burstMode ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}
+                >
+                  <Grid className="w-3.5 h-3.5" /> Burst ({stripTemplate.slots + 2})
+                </button>
+              </div>
+            </Sec>
+            <Sec title="Mirror">
+              <button
+                onClick={() => setMirrored(!mirrored)}
+                className={`w-full py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${mirrored ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border)'}`}
+              >
+                <FlipHorizontal2 className="w-3.5 h-3.5" /> {mirrored ? 'Mirrored' : 'Normal'}
+              </button>
+            </Sec>
 
-          {/* Divider */}
-          <div className="border-t border-(--overlay-border)" />
+            <div className="border-t border-(--overlay-border) my-2" />
 
-          {/* My Frames */}
-          <Sec title="🖼️ My Frames">
-            {customFrames.length > 0 ? (
-              <div className="grid grid-cols-2 gap-1.5">{customFrames.map(f => (
-                <div key={f.id}
-                  className={`relative group py-2.5 px-2 rounded-lg text-left transition-all cursor-pointer ${activeCustomFrame?.id === f.id ? 'bg-[#FF6B4A]/15 border border-[#FF6B4A]/20' : 'bg-(--card-bg) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
-                  onClick={() => handleFrameSwitch(f)}>
-                  <div className="flex items-center gap-1.5">
-                    {(f as any).isCloud && <span className="text-[10px]">☁️</span>}
-                    <Frame className="w-3.5 h-3.5 text-(--text-muted) shrink-0" />
-                    <span className="text-[10px] font-semibold text-(--text-secondary) truncate">{f.name}</span>
-                  </div>
-                  <span className="text-[9px] text-(--text-muted)">{f.slots.length} slots</span>
-                  {/* Actions (Edit / Delete) */}
-                  <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+            {/* AR Filters integrated into Capture tab */}
+            <Sec title="AR Categories">
+              <div className="flex gap-1 overflow-x-auto pb-1">
+                {AR_CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setArFilterCategory(c.id)}
+                    className={`flex-1 min-w-[50px] py-1.5 rounded-lg text-[10px] font-semibold transition-all flex flex-col items-center gap-1 cursor-pointer whitespace-nowrap ${arFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border)'}`}
+                  >
+                    <span className="text-sm">{c.emoji}</span>
+                    <span className="text-[9px]">{c.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Sec>
+
+            <Sec title="AR Face Filters">
+              <div className="grid grid-cols-3 gap-1.5">
+                {AR_FILTERS.filter((f) => f.category === arFilterCategory).map((f) => {
+                  const isActive = activeARFilters.some((af) => af.id === f.id)
+                  return (
                     <button
-                      onClick={e => { e.stopPropagation(); setEditingFrame(f); setShowFrameEditor(true) }}
-                      className="p-1 rounded hover:bg-white/10 cursor-pointer"
-                      title="Edit frame"
+                      key={f.id}
+                      onClick={() => {
+                        toggleARFilter(f)
+                        if (!arEnabled) enableAR()
+                      }}
+                      className={`py-2 px-1 rounded-lg text-center transition-all cursor-pointer ${isActive ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
                     >
-                      <Pencil className="w-3 h-3 text-(--text-muted) hover:text-[#FF6B4A]" />
+                      {f.thumbnail ? (
+                        <div className="relative w-8 h-8 mx-auto mb-1 rounded-full overflow-hidden bg-black/30">
+                          <Image
+                            unoptimized
+                            src={f.thumbnail}
+                            alt={f.label}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-lg block mb-0.5">{f.emoji}</span>
+                      )}
+                      <span className="text-[9px] block leading-tight">{f.label}</span>
                     </button>
-                    <button
-                      onClick={e => handleDeleteFrame(f, e)}
-                      className="p-1 rounded hover:bg-red-500/10 cursor-pointer"
-                      title="Delete frame"
+                  )
+                })}
+              </div>
+            </Sec>
+
+            {/* Active AR Filters Summary */}
+            {activeARFilters.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) block">
+                  Active AR ({activeARFilters.length})
+                </label>
+                <div className="flex flex-wrap gap-1">
+                  {activeARFilters.map((f) => (
+                    <span
+                      key={f.id}
+                      onClick={() => toggleARFilter(f)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#FF6B4A]/10 text-[#FF6B4A] text-[10px] font-semibold cursor-pointer hover:bg-[#FF6B4A]/20 transition-all"
                     >
-                      <Trash2 className="w-3 h-3 text-(--text-muted) hover:text-red-400" />
-                    </button>
-                  </div>
+                      {f.emoji} {f.label} <X className="w-2.5 h-2.5" />
+                    </span>
+                  ))}
                 </div>
-              ))}</div>
-            ) : (
-              <p className="text-xs text-(--text-muted) text-center py-3">No custom frames yet</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-(--text-tertiary) mt-1 h-7 text-[10px]"
+                  onClick={() => setActiveARFilters([])}
+                >
+                  <RotateCcw className="w-3 h-3 mr-1" /> Clear AR Filters
+                </Button>
+              </div>
             )}
-            <Button onClick={() => { setEditingFrame(null); setShowFrameEditor(true) }} className="w-full gap-2 mt-2" size="sm">
-              <Plus className="w-3.5 h-3.5" /> Create New Frame
-            </Button>
-          </Sec>
+          </>
+        )}
 
-          {activeCustomFrame && <p className="text-[10px] text-[#10B981]">✓ Using custom frame: {activeCustomFrame.name} ({activeCustomFrame.slots.length} slots)</p>}
-          {!activeCustomFrame && <p className="text-[10px] text-(--text-muted)">Using built-in: {stripTemplate.emoji} {stripTemplate.label}</p>}
-        </>}
+        {sideTab === 'frames' && (
+          <>
+            {/* Built-in Presets */}
+            <Sec title="📦 Built-in Presets">
+              <div className="grid grid-cols-3 gap-1.5">
+                {STRIP_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleFrameSwitch(null, t)}
+                    className={`py-2.5 rounded-lg text-center transition-all cursor-pointer ${!activeCustomFrame && stripTemplate.id === t.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
+                  >
+                    <span className="text-sm block">{t.emoji}</span>
+                    <span className="text-[9px]">{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Sec>
 
-        {sideTab === 'filters' && <>
-          <Sec title="Category"><div className="flex gap-1">{FILTER_CATEGORIES.map(c => <button key={c.id} onClick={() => setActiveFilterCategory(c.id)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border)'}`}>{c.emoji} {c.label}</button>)}</div></Sec>
-          <Sec title="Filters"><div className="grid grid-cols-3 gap-1.5">{IMAGE_FILTERS.filter(f => f.id === 'none' || f.category === activeFilterCategory).map(f => <button key={f.id} onClick={() => setActiveFilter(f.id)} className={`py-3 rounded-lg text-center transition-all cursor-pointer ${activeFilter === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}><span className="text-lg block mb-0.5">{f.emoji}</span><span className="text-[10px]">{f.label}</span></button>)}</div></Sec>
-        </>}
+            {/* Background — shown when built-in preset is active */}
+            {!activeCustomFrame && (
+              <Sec title="Background">
+                <div className="grid grid-cols-4 gap-1.5">
+                  {STRIP_BACKGROUNDS.map((bg) => (
+                    <button
+                      key={bg.id}
+                      onClick={() => setStripBg(bg.id)}
+                      className={`h-9 rounded-lg border-2 transition-all cursor-pointer ${stripBg === bg.id ? 'border-[#FF6B4A] scale-105' : 'border-(--overlay-border)'}`}
+                      style={{ background: bg.css }}
+                      title={bg.label}
+                    />
+                  ))}
+                </div>
+              </Sec>
+            )}
+
+            {/* Divider */}
+            <div className="border-t border-(--overlay-border)" />
+
+            {/* My Frames */}
+            <Sec title="🖼️ My Frames">
+              {customFrames.length > 0 ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {customFrames.map((f) => (
+                    <div
+                      key={f.id}
+                      className={`relative group py-2.5 px-2 rounded-lg text-left transition-all cursor-pointer ${activeCustomFrame?.id === f.id ? 'bg-[#FF6B4A]/15 border border-[#FF6B4A]/20' : 'bg-(--card-bg) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
+                      onClick={() => handleFrameSwitch(f)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {(f as any).isCloud && <span className="text-[10px]">☁️</span>}
+                        <Frame className="w-3.5 h-3.5 text-(--text-muted) shrink-0" />
+                        <span className="text-[10px] font-semibold text-(--text-secondary) truncate">
+                          {f.name}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-(--text-muted)">{f.slots.length} slots</span>
+                      {/* Actions (Edit / Delete) */}
+                      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingFrame(f)
+                            setShowFrameEditor(true)
+                          }}
+                          className="p-1 rounded hover:bg-white/10 cursor-pointer"
+                          title="Edit frame"
+                        >
+                          <Pencil className="w-3 h-3 text-(--text-muted) hover:text-[#FF6B4A]" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteFrame(f, e)}
+                          className="p-1 rounded hover:bg-red-500/10 cursor-pointer"
+                          title="Delete frame"
+                        >
+                          <Trash2 className="w-3 h-3 text-(--text-muted) hover:text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-(--text-muted) text-center py-3">No custom frames yet</p>
+              )}
+              <Button
+                onClick={() => {
+                  setEditingFrame(null)
+                  setShowFrameEditor(true)
+                }}
+                className="w-full gap-2 mt-2"
+                size="sm"
+              >
+                <Plus className="w-3.5 h-3.5" /> Create New Frame
+              </Button>
+            </Sec>
+
+            {activeCustomFrame && (
+              <p className="text-[10px] text-[#10B981]">
+                ✓ Using custom frame: {activeCustomFrame.name} ({activeCustomFrame.slots.length}{' '}
+                slots)
+              </p>
+            )}
+            {!activeCustomFrame && (
+              <p className="text-[10px] text-(--text-muted)">
+                Using built-in: {stripTemplate.emoji} {stripTemplate.label}
+              </p>
+            )}
+          </>
+        )}
+
+        {sideTab === 'filters' && (
+          <>
+            <Sec title="Category">
+              <div className="flex gap-1">
+                {FILTER_CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveFilterCategory(c.id)}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${activeFilterCategory === c.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20' : 'bg-(--card-bg) text-(--text-muted) border border-(--overlay-border)'}`}
+                  >
+                    {c.emoji} {c.label}
+                  </button>
+                ))}
+              </div>
+            </Sec>
+            <Sec title="Filters">
+              <div className="grid grid-cols-3 gap-1.5">
+                {IMAGE_FILTERS.filter(
+                  (f) => f.id === 'none' || f.category === activeFilterCategory,
+                ).map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveFilter(f.id)}
+                    className={`py-3 rounded-lg text-center transition-all cursor-pointer ${activeFilter === f.id ? 'bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/20 ring-1 ring-[#FF6B4A]/30' : 'bg-(--card-bg) text-(--text-tertiary) border border-(--overlay-border) hover:bg-(--card-bg-hover)'}`}
+                  >
+                    <span className="text-lg block mb-0.5">{f.emoji}</span>
+                    <span className="text-[10px]">{f.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Sec>
+          </>
+        )}
 
         {/* Removed AR tab content */}
 
-        {sideTab === 'text' && <TextPanel 
-            text={stickerText} 
-            onTextChange={v => { setStickerText(v); updateSelectedText({ text: v }) }} 
-            fontFamily={fontFamily} 
-            onFontChange={v => { setFontFamily(v); updateSelectedText({ fontFamily: v }) }} 
-            fontSize={fontSize} 
-            onSizeChange={v => { setFontSize(v); updateSelectedText({ fontSize: v }) }} 
-            fillColor={textColor} 
-            onFillChange={v => { setTextColor(v); updateSelectedText({ fill: v }) }} 
-            strokeColor={textStroke} 
-            onStrokeChange={v => { setTextStroke(v); updateSelectedText({ stroke: v }) }} 
-            strokeWidth={textStrokeWidth} 
-            onStrokeWidthChange={v => { setTextStrokeWidth(v); updateSelectedText({ strokeWidth: v }) }} 
-            onAddText={addTextOverlay} 
-            onAddPreset={addTextPreset} 
-            selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined} 
-          />}
+        {sideTab === 'text' && (
+          <TextPanel
+            text={stickerText}
+            onTextChange={(v) => {
+              setStickerText(v)
+              updateSelectedText({ text: v })
+            }}
+            fontFamily={fontFamily}
+            onFontChange={(v) => {
+              setFontFamily(v)
+              updateSelectedText({ fontFamily: v })
+            }}
+            fontSize={fontSize}
+            onSizeChange={(v) => {
+              setFontSize(v)
+              updateSelectedText({ fontSize: v })
+            }}
+            fillColor={textColor}
+            onFillChange={(v) => {
+              setTextColor(v)
+              updateSelectedText({ fill: v })
+            }}
+            strokeColor={textStroke}
+            onStrokeChange={(v) => {
+              setTextStroke(v)
+              updateSelectedText({ stroke: v })
+            }}
+            strokeWidth={textStrokeWidth}
+            onStrokeWidthChange={(v) => {
+              setTextStrokeWidth(v)
+              updateSelectedText({ strokeWidth: v })
+            }}
+            onAddText={addTextOverlay}
+            onAddPreset={addTextPreset}
+            selectedText={selectedOv?.type === 'text' ? selectedOv.text : undefined}
+          />
+        )}
         {sideTab === 'assets' && <AssetPanel onAddAsset={addAssetOverlay} />}
 
-        {sideTab === 'adjust' && <>
-          <Sec title="Brightness"><Slider value={brightness} onChange={setBrightness} min={50} max={150} label={`${brightness}%`} /></Sec>
-          <Sec title="Contrast"><Slider value={contrast} onChange={setContrast} min={50} max={150} label={`${contrast}%`} /></Sec>
-          <Sec title="Saturation"><Slider value={saturation} onChange={setSaturation} min={0} max={200} label={`${saturation}%`} /></Sec>
-          <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary)" onClick={() => { setBrightness(100); setContrast(100); setSaturation(100) }}><RotateCcw className="w-3.5 h-3.5" /> Reset</Button>
-        </>}
+        {sideTab === 'adjust' && (
+          <>
+            <Sec title="Brightness">
+              <Slider
+                value={brightness}
+                onChange={setBrightness}
+                min={50}
+                max={150}
+                label={`${brightness}%`}
+              />
+            </Sec>
+            <Sec title="Contrast">
+              <Slider
+                value={contrast}
+                onChange={setContrast}
+                min={50}
+                max={150}
+                label={`${contrast}%`}
+              />
+            </Sec>
+            <Sec title="Saturation">
+              <Slider
+                value={saturation}
+                onChange={setSaturation}
+                min={0}
+                max={200}
+                label={`${saturation}%`}
+              />
+            </Sec>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-(--text-tertiary)"
+              onClick={() => {
+                setBrightness(100)
+                setContrast(100)
+                setSaturation(100)
+              }}
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
+            </Button>
+          </>
+        )}
 
         {/* Overlays list */}
-        {overlays.length > 0 && <div><label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Overlays ({overlays.length})</label><div className="space-y-1.5 max-h-48 overflow-y-auto">{overlays.map(ov => {
-          const isSel = selectedOverlay === ov.id
-          return <div key={ov.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${isSel ? 'bg-[#FF6B4A]/8 border-[#FF6B4A]/20' : 'bg-(--card-bg) border-(--overlay-border)'}`} onClick={() => selectOverlayAndSync(ov)}>
-            <span className={`text-[11px] flex-1 truncate ${isSel ? 'text-[#FF6B4A] font-semibold' : 'text-(--text-secondary)'}`}>{ov.type === 'text' ? `Aa "${(ov.text || '').slice(0, 12)}"` : '🖼️ Sticker'}</span>
-            <button onClick={e => { e.stopPropagation(); removeOverlay(ov.id) }} className="cursor-pointer"><X className="w-3 h-3 text-(--text-tertiary) hover:text-white" /></button>
+        {overlays.length > 0 && (
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+              Overlays ({overlays.length})
+            </label>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {overlays.map((ov) => {
+                const isSel = selectedOverlay === ov.id
+                return (
+                  <div
+                    key={ov.id}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${isSel ? 'bg-[#FF6B4A]/8 border-[#FF6B4A]/20' : 'bg-(--card-bg) border-(--overlay-border)'}`}
+                    onClick={() => selectOverlayAndSync(ov)}
+                  >
+                    <span
+                      className={`text-[11px] flex-1 truncate ${isSel ? 'text-[#FF6B4A] font-semibold' : 'text-(--text-secondary)'}`}
+                    >
+                      {ov.type === 'text' ? `Aa "${(ov.text || '').slice(0, 12)}"` : '🖼️ Sticker'}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeOverlay(ov.id)
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <X className="w-3 h-3 text-(--text-tertiary) hover:text-white" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        })}</div></div>}
+        )}
 
         {/* Photos */}
-        {capturedPhotos.length > 0 && !reviewMode && <div>
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">Photos ({capturedPhotos.length})</label>
-          <div className="grid grid-cols-4 gap-1.5">{capturedPhotos.map((photo, i) => <div key={i} className="relative aspect-square rounded-lg overflow-hidden group">
-            <canvas ref={el => { if (el) { const s = 200; el.width = s; el.height = s; const ctx = el.getContext('2d'); if (ctx) { const scale = Math.max(s / photo.width, s / photo.height); const sw = s / scale, sh = s / scale; ctx.drawImage(photo, (photo.width - sw) / 2, (photo.height - sh) / 2, sw, sh, 0, 0, s, s) } } }} className="w-full h-full" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
-              {cameraActive && <button onClick={() => retakePhoto(i)} className="cursor-pointer" title="Retake"><RefreshCw className="w-3.5 h-3.5 text-white" /></button>}
-              <button onClick={() => setCapturedPhotos(prev => prev.filter((_, j) => j !== i))} className="cursor-pointer"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
+        {capturedPhotos.length > 0 && !reviewMode && (
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+              Photos ({capturedPhotos.length})
+            </label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {capturedPhotos.map((photo, i) => (
+                <div
+                  key={'photo-' + i}
+                  className="relative aspect-square rounded-lg overflow-hidden group"
+                >
+                  <canvas
+                    ref={(el) => {
+                      if (el) {
+                        const s = 200
+                        el.width = s
+                        el.height = s
+                        const ctx = el.getContext('2d')
+                        if (ctx) {
+                          const scale = Math.max(s / photo.width, s / photo.height)
+                          const sw = s / scale,
+                            sh = s / scale
+                          ctx.drawImage(
+                            photo,
+                            (photo.width - sw) / 2,
+                            (photo.height - sh) / 2,
+                            sw,
+                            sh,
+                            0,
+                            0,
+                            s,
+                            s,
+                          )
+                        }
+                      }
+                    }}
+                    className="w-full h-full"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                    {cameraActive && (
+                      <button
+                        onClick={() => retakePhoto(i)}
+                        className="cursor-pointer"
+                        title="Retake"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setCapturedPhotos((prev) => prev.filter((_, j) => j !== i))}
+                      className="cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>)}</div>
-        </div>}
+          </div>
+        )}
 
         {/* Review mode */}
-        {reviewMode && <div>
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-[#FF6B4A] mb-2 block flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Review Photos — tap to deselect</label>
-          <div className="grid grid-cols-3 gap-1.5">{capturedPhotos.map((photo, i) => <div key={i} onClick={() => setSelectedForReview(prev => prev.map((v, j) => j === i ? !v : v))} className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all ${selectedForReview[i] ? 'ring-2 ring-[#FF6B4A]' : 'opacity-30'}`}>
-            <canvas ref={el => { if (el) { const s = 200; el.width = s; el.height = s; const ctx = el.getContext('2d'); if (ctx) { const scale = Math.max(s / photo.width, s / photo.height); const sw = s / scale, sh = s / scale; ctx.drawImage(photo, (photo.width - sw) / 2, (photo.height - sh) / 2, sw, sh, 0, 0, s, s) } } }} className="w-full h-full" />
-            {selectedForReview[i] && <span className="absolute top-1 right-1 text-[10px] bg-[#FF6B4A] text-white px-1 rounded">✓</span>}
-          </div>)}</div>
-          <Button onClick={confirmReview} className="w-full mt-2 gap-2"><Eye className="w-4 h-4" /> Keep {selectedForReview.filter(Boolean).length} Selected</Button>
-        </div>}
+        {reviewMode && (
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-[#FF6B4A] mb-2 block flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5" /> Review Photos — tap to deselect
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {capturedPhotos.map((photo, i) => (
+                <div
+                  key={'photo-' + i}
+                  onClick={() =>
+                    setSelectedForReview((prev) => prev.map((v, j) => (j === i ? !v : v)))
+                  }
+                  className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all ${selectedForReview[i] ? 'ring-2 ring-[#FF6B4A]' : 'opacity-30'}`}
+                >
+                  <canvas
+                    ref={(el) => {
+                      if (el) {
+                        const s = 200
+                        el.width = s
+                        el.height = s
+                        const ctx = el.getContext('2d')
+                        if (ctx) {
+                          const scale = Math.max(s / photo.width, s / photo.height)
+                          const sw = s / scale,
+                            sh = s / scale
+                          ctx.drawImage(
+                            photo,
+                            (photo.width - sw) / 2,
+                            (photo.height - sh) / 2,
+                            sw,
+                            sh,
+                            0,
+                            0,
+                            s,
+                            s,
+                          )
+                        }
+                      }
+                    }}
+                    className="w-full h-full"
+                  />
+                  {selectedForReview[i] && (
+                    <span className="absolute top-1 right-1 text-[10px] bg-[#FF6B4A] text-white px-1 rounded">
+                      ✓
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button onClick={confirmReview} className="w-full mt-2 gap-2">
+              <Eye className="w-4 h-4" /> Keep {selectedForReview.filter(Boolean).length} Selected
+            </Button>
+          </div>
+        )}
 
-        {!reviewMode && <div className="space-y-2 pt-2">
-          <Button variant="ghost" size="sm" className="w-full text-(--text-tertiary)" onClick={() => { setCapturedPhotos([]); setOverlays([]) }}><RotateCcw className="w-4 h-4" /> Clear All</Button>
-        </div>}
+        {!reviewMode && (
+          <div className="space-y-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-(--text-tertiary)"
+              onClick={() => {
+                setCapturedPhotos([])
+                setOverlays([])
+              }}
+            >
+              <RotateCcw className="w-4 h-4" /> Clear All
+            </Button>
+          </div>
+        )}
       </div>
     </>
   )
@@ -894,14 +1372,23 @@ export default function PhotoboothPage() {
       </div>
 
       {/* ═══ MAIN AREA — Camera + Strip ═══ */}
-      <div className="flex-1 flex flex-col p-0 lg:p-6 bg-(--canvas-bg) relative" onClick={() => { setSelectedOverlay(null); setShowExport(false) }}>
+      <div
+        className="flex-1 flex flex-col p-0 lg:p-6 bg-(--canvas-bg) relative"
+        onClick={() => {
+          setSelectedOverlay(null)
+          setShowExport(false)
+        }}
+      >
         {/* Export Controls */}
         {!reviewMode && (
-          <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
-            <button 
+          <div
+            className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
               title="Export"
               disabled={capturedPhotos.length === 0}
-              onClick={() => capturedPhotos.length > 0 && setShowExport(!showExport)} 
+              onClick={() => capturedPhotos.length > 0 && setShowExport(!showExport)}
               className={`h-8 px-3 flex items-center justify-center gap-1.5 rounded-xl shadow-xl border transition-all font-semibold text-[11px] ${capturedPhotos.length === 0 ? 'opacity-40 cursor-not-allowed bg-(--panel-bg) border-(--overlay-border) text-(--text-muted)' : showExport ? 'bg-[#FF6B4A] border-[#FF6B4A] text-white cursor-pointer' : 'bg-(--panel-bg) border-(--overlay-border) text-(--text-secondary) hover:bg-(--card-bg-hover) cursor-pointer'}`}
             >
               <Download className="w-4 h-4" /> Export
@@ -925,210 +1412,379 @@ export default function PhotoboothPage() {
         <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
           {/* Undo/Redo */}
           <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-lg border border-(--overlay-border)">
-            <button title="Undo" onClick={() => {}} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Undo2 className="w-4 h-4" /></button>
-            <button title="Redo" onClick={() => {}} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Redo2 className="w-4 h-4" /></button>
+            <button
+              title="Undo"
+              onClick={() => {}}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              title="Redo"
+              onClick={() => {}}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
           </div>
-          
+
           {/* Zoom */}
           <div className="flex flex-col gap-2 bg-(--panel-bg) p-2 rounded-2xl shadow-xl border border-(--overlay-border)">
-            <button onClick={() => setZoom(Math.min(zoom + 0.1, 3))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><Plus className="w-4 h-4" /></button>
-            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">{Math.round(zoom * 100)}%</div>
-            <button onClick={() => setZoom(Math.max(zoom - 0.1, 0.5))} className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"><div className="w-3 h-0.5 bg-current rounded-full" /></button>
+            <button
+              onClick={() => setZoom(Math.min(zoom + 0.1, 3))}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <div className="text-[10px] font-bold text-center text-(--text-muted) w-8">
+              {Math.round(zoom * 100)}%
+            </div>
+            <button
+              onClick={() => setZoom(Math.max(zoom - 0.1, 0.5))}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-(--card-bg) hover:bg-(--card-bg-hover) text-(--text-secondary) transition-all cursor-pointer"
+            >
+              <div className="w-3 h-0.5 bg-current rounded-full" />
+            </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-auto rounded-xl">
-          <div 
-            style={{ 
-              width: `${Math.max(100, zoom * 100)}%`, 
-              height: `${Math.max(100, zoom * 100)}%`, 
-              display: 'flex', 
+          <div
+            style={{
+              width: `${Math.max(100, zoom * 100)}%`,
+              height: `${Math.max(100, zoom * 100)}%`,
+              display: 'flex',
               flexDirection: 'column',
               minWidth: '100%',
-              minHeight: '100%' 
+              minHeight: '100%',
             }}
           >
-          <div 
-            className="w-full h-full flex flex-col lg:flex-row items-center justify-center p-4 lg:p-6 gap-6 lg:gap-8 origin-top-left transition-transform duration-200"
-            style={{ transform: `scale(${zoom})`, width: `${(1 / zoom) * 100}%`, height: `${(1 / zoom) * 100}%` }}
-          >
-            {/* Camera — Normal or AR */}
-            <div className="relative w-full lg:max-w-[640px]">
-              <div className="relative rounded-none lg:rounded-2xl overflow-hidden shadow-2xl">
-                {arEnabled ? (
-                  /* ──── AR Camera (MindAR + Three.js) ──── */
-                  <div 
-                    className="relative"
-                    style={{ filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }}
-                  >
-                    <ARFaceFilter
-                      ref={arRef}
-                      mirrored={mirrored}
-                      activeFilters={activeARFilters}
-                      className="rounded-none lg:rounded-xl"
-                      onReady={() => toast('🎭 AR Camera ready!', 'success')}
-                      onError={(err) => { toast(`AR Error: ${err}`, 'error'); disableAR() }}
-                      onLoading={setArLoading}
-                    />
-                    {/* AR LIVE badge */}
-                    <div className="absolute top-3 left-3 bg-linear-to-r from-[#FF6B4A] to-[#EC4899] px-2.5 py-1 rounded-full z-10 flex items-center gap-1.5">
-                      <ScanFace className="w-3 h-3 text-white" />
-                      <span className="text-[10px] text-white font-bold">AR LIVE</span>
-                    </div>
-                    {/* Active filters */}
-                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
-                      {activeARFilters.length > 0 && (
-                        <div className="bg-black/50 backdrop-blur px-2 py-1 rounded-full">
-                          <span className="text-[10px] text-white font-medium">
-                            {activeARFilters.map(f => f.emoji).join(' ')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
-                    {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
-                  </div>
-                ) : (
-                  /* ──── Normal Camera ──── */
-                  <div className="relative rounded-none lg:rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
-                    <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: mirrored ? 'scaleX(-1)' : 'none', filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim() }} playsInline muted autoPlay />
-                    {!cameraActive && !arEnabled && !isSwitching && <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)"><Camera className="w-16 h-16 mb-4 opacity-20" /><p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p></div>}
-                    {activeFilter !== 'none' && cameraActive && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10"><span className="text-[10px] text-white font-medium">{IMAGE_FILTERS.find(f => f.id === activeFilter)?.emoji} {IMAGE_FILTERS.find(f => f.id === activeFilter)?.label}</span></div>}
-                    {showFlash && <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />}
-                    {countdown > 0 && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">{countdown}</span></div>}
-                    {isBursting && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /><span className="text-xs font-bold text-white">RECORDING</span></div>}
-                  </div>
-                )}
-                
-                {/* Smooth Transition Ghost Frame */}
-                {switchToBg && (
-                  <div className={`absolute inset-0 z-40 bg-black transition-opacity duration-300 pointer-events-none ${isSwitching ? 'opacity-100' : 'opacity-0'}`}>
-                     <img src={switchToBg} alt="" className="w-full h-full object-cover" />
-                     {isSwitching && (
-                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
-                         <Loader2 className="w-8 h-8 text-[#FF6B4A] animate-spin mb-3 drop-shadow-xl" />
-                         <span className="text-white text-xs font-semibold tracking-wide drop-shadow-md">Switching lenses...</span>
-                       </div>
-                     )}
-                  </div>
-                )}
-              </div>
-              {/* Desktop capture button — works for both AR and normal camera */}
-              {(cameraActive || arEnabled) && <div className="hidden lg:flex justify-center mt-4"><button onClick={handleCapture} disabled={countdown > 0 || isBursting} className="w-16 h-16 rounded-full border-4 border-(--overlay-border-hover) bg-white hover:bg-stone-100 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-xl disabled:opacity-50 touch-manipulation">{burstMode ? <Grid className="w-6 h-6 text-[#FF6B4A]" /> : <div className="w-10 h-10 rounded-full bg-[#FF6B4A]" />}</button></div>}
-            </div>
-
-            {/* Strip / Frame preview — always show when not in review mode */}
-            {!reviewMode && (
-              <div ref={previewRef}
-                className="relative rounded-2xl shadow-2xl w-full"
-                style={{
-                  maxWidth: activeCustomFrame 
-                    ? (activeCustomFrame.width > activeCustomFrame.height ? '640px' : '360px') 
-                    : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid' ? '300px' : '240px',
-                  ...(activeCustomFrame ? {} : { aspectRatio: stripTemplate.id === 'polaroid' ? '5/6' : stripTemplate.id === 'grid2x2' ? '1/1' : '3/8' })
-                }}
-                onPointerDown={() => setActiveSlot(null)}
-                onPointerMove={e => { onSlotMove(e) }}
-                onPointerUp={() => { onSlotUp() }}
-              >
-                {/* ── Loading Spinner for Frame Switch ── */}
-                {isSwitchingFrame && (
-                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-2xl">
-                    <Loader2 className="w-10 h-10 text-[#FF6B4A] animate-spin drop-shadow-xl" />
-                  </div>
-                )}
-                
-                {activeCustomFrame ? (
-                  <FramePreviewCanvas frame={activeCustomFrame} photos={capturedPhotos} slotOffsets={slotOffsets} onLoaded={() => setIsSwitchingFrame(false)} />
-                ) : (
-                  <StripCanvas template={stripTemplate} photos={capturedPhotos} bg={stripBg} onLoaded={() => setIsSwitchingFrame(false)} />
-                )}
-                {/* Konva overlay layer for text/assets — only block parent deselect via onClick */}
-                {previewDims.w > 0 && previewDims.h > 0 && (
-                  <div onClick={e => e.stopPropagation()}>
-                    <OverlayCanvas
-                      ref={overlayRef}
-                      elements={overlays}
-                      setElements={setOverlays}
-                      selectedId={selectedOverlay}
-                      setSelectedId={setSelectedOverlay}
-                      width={previewDims.w}
-                      height={previewDims.h}
-                    />
-                  </div>
-                )}
-                {/* Slot drag zones — rendered above the Konva overlay so frame photos can be repositioned */}
-                {activeCustomFrame && activeCustomFrame.slots.map((slot, i) => (
-                  i < capturedPhotos.length && (
-                    <div key={`slot-drag-${i}`}
-                      data-slot-zone="true"
-                      className={`absolute cursor-grab active:cursor-grabbing group ${activeSlot === i ? 'ring-2 ring-[#FF6B4A]/50 ring-offset-2 ring-offset-black/20' : ''}`}
+            <div
+              className="w-full h-full flex flex-col lg:flex-row items-center justify-center p-4 lg:p-6 gap-6 lg:gap-8 origin-top-left transition-transform duration-200"
+              style={{
+                transform: `scale(${zoom})`,
+                width: `${(1 / zoom) * 100}%`,
+                height: `${(1 / zoom) * 100}%`,
+              }}
+            >
+              {/* Camera — Normal or AR */}
+              <div className="relative w-full lg:max-w-[640px]">
+                <div className="relative rounded-none lg:rounded-2xl overflow-hidden shadow-2xl">
+                  {arEnabled ? (
+                    /* ──── AR Camera (MindAR + Three.js) ──── */
+                    <div
+                      className="relative"
                       style={{
-                        left: `${(slot.x / activeCustomFrame.width) * 100}%`,
-                        top: `${(slot.y / activeCustomFrame.height) * 100}%`,
-                        width: `${(slot.w / activeCustomFrame.width) * 100}%`,
-                        height: `${(slot.h / activeCustomFrame.height) * 100}%`,
-                        borderRadius: slot.radius > 0 ? `${(slot.radius / Math.min(slot.w, slot.h)) * 50}%` : undefined,
-                        transform: slot.rotation ? `rotate(${slot.rotation}deg)` : undefined,
-                        zIndex: activeSlot === i ? 30 : 20,
+                        filter:
+                          `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim(),
                       }}
-                      title={`Drag to reposition photo ${i + 1}`}
-                      onPointerDown={e => onSlotDown(e, i)}
                     >
-                      {/* Floating Zoom Controls for Selected Photo */}
-                      {activeSlot === i && (
-                        <div 
-                          className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md rounded-full px-2 py-1.5 flex items-center justify-center gap-1.5 shadow-xl min-w-[80px]"
-                          onPointerDown={e => e.stopPropagation()} // Prevent drag start when clicking zoom buttons
-                          style={{ cursor: 'default' }}
-                        >
-                          <button 
-                            className="p-1 text-white hover:text-[#FF6B4A] active:scale-90 transition-transform bg-white/10 rounded-full"
-                            onClick={() => adjustZoom(i, -0.05)}
-                          ><Minus className="w-3.5 h-3.5" /></button>
-                          
-                          <span className="text-[10px] sm:text-[11px] font-bold text-white w-8 text-center tabular-nums pointer-events-none">
-                            {Math.round(getSlotOffset(i).scale * 100)}%
+                      <ARFaceFilter
+                        ref={arRef}
+                        mirrored={mirrored}
+                        activeFilters={activeARFilters}
+                        className="rounded-none lg:rounded-xl"
+                        onReady={() => toast('🎭 AR Camera ready!', 'success')}
+                        onError={(err) => {
+                          toast(`AR Error: ${err}`, 'error')
+                          disableAR()
+                        }}
+                        onLoading={setArLoading}
+                      />
+                      {/* AR LIVE badge */}
+                      <div className="absolute top-3 left-3 bg-linear-to-r from-[#FF6B4A] to-[#EC4899] px-2.5 py-1 rounded-full z-10 flex items-center gap-1.5">
+                        <ScanFace className="w-3 h-3 text-white" />
+                        <span className="text-[10px] text-white font-bold">AR LIVE</span>
+                      </div>
+                      {/* Active filters */}
+                      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+                        {activeARFilters.length > 0 && (
+                          <div className="bg-black/50 backdrop-blur px-2 py-1 rounded-full">
+                            <span className="text-[10px] text-white font-medium">
+                              {activeARFilters.map((f) => f.emoji).join(' ')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {showFlash && (
+                        <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />
+                      )}
+                      {countdown > 0 && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+                          <span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">
+                            {countdown}
                           </span>
-                          
-                          <button 
-                            className="p-1 text-white hover:text-[#FF6B4A] active:scale-90 transition-transform bg-white/10 rounded-full"
-                            onClick={() => adjustZoom(i, 0.05)}
-                          ><Plus className="w-3.5 h-3.5" /></button>
                         </div>
                       )}
                     </div>
-                  )
-                ))}
+                  ) : (
+                    /* ──── Normal Camera ──── */
+                    <div
+                      className="relative rounded-none lg:rounded-xl overflow-hidden bg-black"
+                      style={{ aspectRatio: '4/3' }}
+                    >
+                      <video
+                        ref={videoRef}
+                        className="w-full h-full object-cover"
+                        style={{
+                          transform: mirrored ? 'scaleX(-1)' : 'none',
+                          filter:
+                            `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) ${CSS_FILTER_PREVIEW[activeFilter] || ''}`.trim(),
+                        }}
+                        playsInline
+                        muted
+                        autoPlay
+                      />
+                      {!cameraActive && !arEnabled && !isSwitching && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-muted)">
+                          <Camera className="w-16 h-16 mb-4 opacity-20" />
+                          <p className="text-sm font-medium">Click &ldquo;Start Camera&rdquo;</p>
+                        </div>
+                      )}
+                      {activeFilter !== 'none' && cameraActive && (
+                        <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full z-10">
+                          <span className="text-[10px] text-white font-medium">
+                            {IMAGE_FILTERS.find((f) => f.id === activeFilter)?.emoji}{' '}
+                            {IMAGE_FILTERS.find((f) => f.id === activeFilter)?.label}
+                          </span>
+                        </div>
+                      )}
+                      {showFlash && (
+                        <div className="absolute inset-0 bg-white z-30 animate-[flashFade_0.3s_ease-out_forwards]" />
+                      )}
+                      {countdown > 0 && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+                          <span className="text-[80px] lg:text-[120px] font-black text-white animate-pulse drop-shadow-2xl">
+                            {countdown}
+                          </span>
+                        </div>
+                      )}
+                      {isBursting && (
+                        <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1.5 rounded-full z-20">
+                          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                          <span className="text-xs font-bold text-white">RECORDING</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Smooth Transition Ghost Frame */}
+                  {switchToBg && (
+                    <div
+                      className={`absolute inset-0 z-40 bg-black transition-opacity duration-300 pointer-events-none ${isSwitching ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                      <Image unoptimized src={switchToBg} alt="" fill className="object-cover" />
+                      {isSwitching && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
+                          <Loader2 className="w-8 h-8 text-[#FF6B4A] animate-spin mb-3 drop-shadow-xl" />
+                          <span className="text-white text-xs font-semibold tracking-wide drop-shadow-md">
+                            Switching lenses...
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {/* Desktop capture button — works for both AR and normal camera */}
+                {(cameraActive || arEnabled) && (
+                  <div className="hidden lg:flex justify-center mt-4">
+                    <button
+                      onClick={handleCapture}
+                      disabled={countdown > 0 || isBursting}
+                      className="w-16 h-16 rounded-full border-4 border-(--overlay-border-hover) bg-white hover:bg-stone-100 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-xl disabled:opacity-50 touch-manipulation"
+                    >
+                      {burstMode ? (
+                        <Grid className="w-6 h-6 text-[#FF6B4A]" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[#FF6B4A]" />
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-            
-            <div className="pb-32 lg:pb-8" />
+
+              {/* Strip / Frame preview — always show when not in review mode */}
+              {!reviewMode && (
+                <div
+                  ref={previewRef}
+                  className="relative rounded-2xl shadow-2xl w-full"
+                  style={{
+                    maxWidth: activeCustomFrame
+                      ? activeCustomFrame.width > activeCustomFrame.height
+                        ? '640px'
+                        : '360px'
+                      : stripTemplate.id === 'grid2x2' || stripTemplate.id === 'polaroid'
+                        ? '300px'
+                        : '240px',
+                    ...(activeCustomFrame
+                      ? {}
+                      : {
+                          aspectRatio:
+                            stripTemplate.id === 'polaroid'
+                              ? '5/6'
+                              : stripTemplate.id === 'grid2x2'
+                                ? '1/1'
+                                : '3/8',
+                        }),
+                  }}
+                  onPointerDown={() => setActiveSlot(null)}
+                  onPointerMove={(e) => {
+                    onSlotMove(e)
+                  }}
+                  onPointerUp={() => {
+                    onSlotUp()
+                  }}
+                >
+                  {/* ── Loading Spinner for Frame Switch ── */}
+                  {isSwitchingFrame && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-2xl">
+                      <Loader2 className="w-10 h-10 text-[#FF6B4A] animate-spin drop-shadow-xl" />
+                    </div>
+                  )}
+
+                  {activeCustomFrame ? (
+                    <FramePreviewCanvas
+                      frame={activeCustomFrame}
+                      photos={capturedPhotos}
+                      slotOffsets={slotOffsets}
+                      onLoaded={() => setIsSwitchingFrame(false)}
+                    />
+                  ) : (
+                    <StripCanvas
+                      template={stripTemplate}
+                      photos={capturedPhotos}
+                      bg={stripBg}
+                      onLoaded={() => setIsSwitchingFrame(false)}
+                    />
+                  )}
+                  {/* Konva overlay layer for text/assets — only block parent deselect via onClick */}
+                  {previewDims.w > 0 && previewDims.h > 0 && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <OverlayCanvas
+                        ref={overlayRef}
+                        elements={overlays}
+                        setElements={setOverlays}
+                        selectedId={selectedOverlay}
+                        setSelectedId={setSelectedOverlay}
+                        width={previewDims.w}
+                        height={previewDims.h}
+                      />
+                    </div>
+                  )}
+                  {/* Slot drag zones — rendered above the Konva overlay so frame photos can be repositioned */}
+                  {activeCustomFrame &&
+                    activeCustomFrame.slots.map(
+                      (slot, i) =>
+                        i < capturedPhotos.length && (
+                          <div
+                            key={`slot-drag-${i}`}
+                            data-slot-zone="true"
+                            className={`absolute cursor-grab active:cursor-grabbing group ${activeSlot === i ? 'ring-2 ring-[#FF6B4A]/50 ring-offset-2 ring-offset-black/20' : ''}`}
+                            style={{
+                              left: `${(slot.x / activeCustomFrame.width) * 100}%`,
+                              top: `${(slot.y / activeCustomFrame.height) * 100}%`,
+                              width: `${(slot.w / activeCustomFrame.width) * 100}%`,
+                              height: `${(slot.h / activeCustomFrame.height) * 100}%`,
+                              borderRadius:
+                                slot.radius > 0
+                                  ? `${(slot.radius / Math.min(slot.w, slot.h)) * 50}%`
+                                  : undefined,
+                              transform: slot.rotation ? `rotate(${slot.rotation}deg)` : undefined,
+                              zIndex: activeSlot === i ? 30 : 20,
+                            }}
+                            title={`Drag to reposition photo ${i + 1}`}
+                            onPointerDown={(e) => onSlotDown(e, i)}
+                          >
+                            {/* Floating Zoom Controls for Selected Photo */}
+                            {activeSlot === i && (
+                              <div
+                                className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md rounded-full px-2 py-1.5 flex items-center justify-center gap-1.5 shadow-xl min-w-[80px]"
+                                onPointerDown={(e) => e.stopPropagation()} // Prevent drag start when clicking zoom buttons
+                                style={{ cursor: 'default' }}
+                              >
+                                <button
+                                  className="p-1 text-white hover:text-[#FF6B4A] active:scale-90 transition-transform bg-white/10 rounded-full"
+                                  onClick={() => adjustZoom(i, -0.05)}
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+
+                                <span className="text-[10px] sm:text-[11px] font-bold text-white w-8 text-center tabular-nums pointer-events-none">
+                                  {Math.round(getSlotOffset(i).scale * 100)}%
+                                </span>
+
+                                <button
+                                  className="p-1 text-white hover:text-[#FF6B4A] active:scale-90 transition-transform bg-white/10 rounded-full"
+                                  onClick={() => adjustZoom(i, 0.05)}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ),
+                    )}
+                </div>
+              )}
+
+              <div className="pb-32 lg:pb-8" />
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
       {/* ═══ MOBILE: Floating capture button ═══ */}
       {cameraActive && (
         <div className="lg:hidden fixed bottom-[180px] md:bottom-[140px] left-1/2 -translate-x-1/2 z-52">
-          <button onClick={handleCapture} disabled={countdown > 0 || isBursting}
-            className="w-[68px] h-[68px] rounded-full border-4 border-white/30 bg-white active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.4)] disabled:opacity-50 touch-manipulation">
-            {burstMode ? <Grid className="w-7 h-7 text-[#FF6B4A]" /> : <div className="w-11 h-11 rounded-full bg-[#FF6B4A]" />}
+          <button
+            onClick={handleCapture}
+            disabled={countdown > 0 || isBursting}
+            className="w-[68px] h-[68px] rounded-full border-4 border-white/30 bg-white active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.4)] disabled:opacity-50 touch-manipulation"
+          >
+            {burstMode ? (
+              <Grid className="w-7 h-7 text-[#FF6B4A]" />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-[#FF6B4A]" />
+            )}
           </button>
         </div>
       )}
 
       {/* ═══ MOBILE BOTTOM SHEET ═══ */}
-      <MobileBottomSheet>
-        {sidebarContent}
-      </MobileBottomSheet>
+      <MobileBottomSheet>{sidebarContent}</MobileBottomSheet>
 
       {/* CSS animations */}
       <style jsx global>{`
-        @keyframes flashFade { from { opacity: 1 } to { opacity: 0 } }
-        @keyframes curtainReveal { 0% { opacity: 0; transform: scale(0.8) } 30% { opacity: 1; transform: scale(1.05) } 100% { opacity: 1; transform: scale(1) } }
-        @keyframes loadBar { from { width: 0 } to { width: 100% } }
+        @keyframes flashFade {
+          from {
+            opacity: 1;
+          }
+          to {
+            opacity: 0;
+          }
+        }
+        @keyframes curtainReveal {
+          0% {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          30% {
+            opacity: 1;
+            transform: scale(1.05);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes loadBar {
+          from {
+            width: 0;
+          }
+          to {
+            width: 100%;
+          }
+        }
       `}</style>
 
       {/* ═══ FRAME EDITOR MODAL ═══ */}
@@ -1141,22 +1797,44 @@ export default function PhotoboothPage() {
               onSave={(frame) => {
                 // Reload frames from localStorage + cloud
                 let localFrames: FrameTemplate[] = []
-                try { localFrames = JSON.parse(localStorage.getItem('sticker-studio-frame-templates') || '[]') } catch {}
+                try {
+                  localFrames = JSON.parse(
+                    localStorage.getItem('sticker-studio-frame-templates') || '[]',
+                  )
+                } catch {}
                 setCustomFrames(localFrames)
                 handleFrameSwitch(frame)
                 setEditingFrame(null)
                 setShowFrameEditor(false)
                 setSideTab('frames')
                 // Also reload cloud frames
-                fetch('/api/frames').then(r => r.json()).then(data => {
-                  if (data.frames?.length) {
-                    const cloudFrames = data.frames.map((f: any) => ({ id: f.id, name: f.name, width: f.width, height: f.height, slots: f.slots, frameDataUrl: f.frameUrl || '', createdAt: f.createdAt, isCloud: true }))
-                    const localIds = new Set(localFrames.map((f: FrameTemplate) => f.id))
-                    setCustomFrames([...localFrames, ...cloudFrames.filter((f: FrameTemplate) => !localIds.has(f.id))])
-                  }
-                }).catch(() => {})
+                fetch('/api/frames')
+                  .then((r) => r.json())
+                  .then((data) => {
+                    if (data.frames?.length) {
+                      const cloudFrames = data.frames.map((f: any) => ({
+                        id: f.id,
+                        name: f.name,
+                        width: f.width,
+                        height: f.height,
+                        slots: f.slots,
+                        frameDataUrl: f.frameUrl || '',
+                        createdAt: f.createdAt,
+                        isCloud: true,
+                      }))
+                      const localIds = new Set(localFrames.map((f: FrameTemplate) => f.id))
+                      setCustomFrames([
+                        ...localFrames,
+                        ...cloudFrames.filter((f: FrameTemplate) => !localIds.has(f.id)),
+                      ])
+                    }
+                  })
+                  .catch(() => {})
               }}
-              onClose={() => { setEditingFrame(null); setShowFrameEditor(false) }}
+              onClose={() => {
+                setEditingFrame(null)
+                setShowFrameEditor(false)
+              }}
             />
           </div>
         </div>
@@ -1166,21 +1844,66 @@ export default function PhotoboothPage() {
 }
 
 function Sec({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div><label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">{title}</label>{children}</div>
+  return (
+    <div>
+      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted) mb-2 block">
+        {title}
+      </label>
+      {children}
+    </div>
+  )
 }
 
-function Slider({ value, onChange, min, max, label }: { value: number; onChange: (v: number) => void; min: number; max: number; label: string }) {
+function Slider({
+  value,
+  onChange,
+  min,
+  max,
+  label,
+}: {
+  value: number
+  onChange: (v: number) => void
+  min: number
+  max: number
+  label: string
+}) {
   const pct = ((value - min) / (max - min)) * 100
-  return <div className="flex items-center gap-2"><input type="range" min={min} max={max} value={value} onChange={e => onChange(Number(e.target.value))} className="flex-1" style={{ background: `linear-gradient(to right, #FF6B4A ${pct}%, rgba(255,255,255,0.06) ${pct}%)` }} /><span className="text-[10px] text-(--text-muted) font-mono w-10 text-right">{label}</span></div>
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1"
+        style={{
+          background: `linear-gradient(to right, #FF6B4A ${pct}%, rgba(255,255,255,0.06) ${pct}%)`,
+        }}
+      />
+      <span className="text-[10px] text-(--text-muted) font-mono w-10 text-right">{label}</span>
+    </div>
+  )
 }
 
-function StripCanvas({ template, photos, bg, onLoaded }: { template: StripTemplate; photos: HTMLCanvasElement[]; bg: string; onLoaded?: () => void }) {
+function StripCanvas({
+  template,
+  photos,
+  bg,
+  onLoaded,
+}: {
+  template: StripTemplate
+  photos: HTMLCanvasElement[]
+  bg: string
+  onLoaded?: () => void
+}) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     if (!ref.current) return
     const W = template.id === 'grid2x2' || template.id === 'polaroid' ? 600 : 480
     const H = template.id === 'polaroid' ? 720 : template.id === 'grid2x2' ? 600 : 1280
-    ref.current.width = W; ref.current.height = H
+    ref.current.width = W
+    ref.current.height = H
     // Render with actual photos or generate placeholder canvases
     if (photos.length > 0) {
       template.render(ref.current.getContext('2d')!, photos, W, H, bg)
@@ -1192,41 +1915,83 @@ function StripCanvas({ template, photos, bg, onLoaded }: { template: StripTempla
       if (bgDef.css.startsWith('linear-gradient')) {
         const colors = bgDef.css.match(/#[a-fA-F0-9]{6}/g) || ['#fff', '#fff']
         const grad = ctx.createLinearGradient(0, 0, 0, H)
-        grad.addColorStop(0, colors[0]); grad.addColorStop(1, colors[1] || colors[0])
+        grad.addColorStop(0, colors[0])
+        grad.addColorStop(1, colors[1] || colors[0])
         ctx.fillStyle = grad
       } else {
         ctx.fillStyle = bgDef.css
       }
       ctx.fillRect(0, 0, W, H)
       // Draw placeholder slots
-      const pad = template.id === 'filmstrip' ? 44 : template.id === 'polaroid' ? 40 : template.id === 'grid2x2' ? 20 : 24
+      const pad =
+        template.id === 'filmstrip'
+          ? 44
+          : template.id === 'polaroid'
+            ? 40
+            : template.id === 'grid2x2'
+              ? 20
+              : 24
       const slotCount = template.slots
       if (template.id === 'grid2x2') {
-        const cw = (W - pad * 3) / 2, ch = (H - pad * 3) / 2
-        const pos = [[pad, pad], [pad * 2 + cw, pad], [pad, pad * 2 + ch], [pad * 2 + cw, pad * 2 + ch]]
+        const cw = (W - pad * 3) / 2,
+          ch = (H - pad * 3) / 2
+        const pos = [
+          [pad, pad],
+          [pad * 2 + cw, pad],
+          [pad, pad * 2 + ch],
+          [pad * 2 + cw, pad * 2 + ch],
+        ]
         pos.forEach(([x, y], i) => {
-          ctx.fillStyle = '#f0f0f0'; ctx.beginPath(); ctx.roundRect(x, y, cw, ch, 8); ctx.fill()
-          ctx.fillStyle = '#bbb'; ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillStyle = '#f0f0f0'
+          ctx.beginPath()
+          ctx.roundRect(x, y, cw, ch, 8)
+          ctx.fill()
+          ctx.fillStyle = '#bbb'
+          ctx.font = 'bold 18px system-ui'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
           ctx.fillText(`Photo ${i + 1}`, x + cw / 2, y + ch / 2)
         })
       } else if (template.id === 'polaroid') {
         const bPad = 100
-        ctx.fillStyle = '#f0f0f0'; ctx.beginPath(); ctx.roundRect(pad, pad, W - pad * 2, H - pad - bPad, 4); ctx.fill()
-        ctx.fillStyle = '#bbb'; ctx.font = 'bold 24px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillStyle = '#f0f0f0'
+        ctx.beginPath()
+        ctx.roundRect(pad, pad, W - pad * 2, H - pad - bPad, 4)
+        ctx.fill()
+        ctx.fillStyle = '#bbb'
+        ctx.font = 'bold 24px system-ui'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
         ctx.fillText('Photo 1', W / 2, (H - bPad) / 2)
-        ctx.fillStyle = '#999'; ctx.font = '20px Lora'; ctx.textAlign = 'center'
-        ctx.fillText(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), W / 2, H - bPad / 2 + 10)
+        ctx.fillStyle = '#999'
+        ctx.font = '20px Lora'
+        ctx.textAlign = 'center'
+        ctx.fillText(
+          new Date().toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          W / 2,
+          H - bPad / 2 + 10,
+        )
       } else {
         const slotH = (H - pad * (slotCount + 1)) / slotCount
         for (let i = 0; i < slotCount; i++) {
           const y = pad + i * (slotH + pad)
-          ctx.fillStyle = '#f0f0f0'; ctx.beginPath(); ctx.roundRect(pad, y, W - pad * 2, slotH, 8); ctx.fill()
-          ctx.fillStyle = '#bbb'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillStyle = '#f0f0f0'
+          ctx.beginPath()
+          ctx.roundRect(pad, y, W - pad * 2, slotH, 8)
+          ctx.fill()
+          ctx.fillStyle = '#bbb'
+          ctx.font = 'bold 16px system-ui'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
           ctx.fillText(`Photo ${i + 1}`, W / 2, y + slotH / 2)
         }
       }
     }
-    
+
     // Allow the browser to paint before notifying load complete
     if (onLoaded) {
       requestAnimationFrame(() => {
@@ -1237,8 +2002,14 @@ function StripCanvas({ template, photos, bg, onLoaded }: { template: StripTempla
   return <canvas ref={ref} className="w-full h-full" />
 }
 
-function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
-  frame: FrameTemplate; photos: HTMLCanvasElement[]
+function FramePreviewCanvas({
+  frame,
+  photos,
+  slotOffsets,
+  onLoaded,
+}: {
+  frame: FrameTemplate
+  photos: HTMLCanvasElement[]
   slotOffsets: Record<number, { ox: number; oy: number; scale: number }>
   onLoaded?: () => void
 }) {
@@ -1249,13 +2020,14 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
   // Load frame image
   useEffect(() => {
     let active = true
-    if (!frame.frameDataUrl) { 
+    if (!frame.frameDataUrl) {
       setFrameImg(null)
       if (onLoaded) requestAnimationFrame(() => onLoaded())
-      return 
+      return
     }
     setFrameImg(null) // clear previous image to avoid overlap
-    const img = new Image()
+    const img = new window.Image()
+    img.crossOrigin = 'anonymous'
     img.onload = () => {
       if (active) {
         setFrameImg(img)
@@ -1263,7 +2035,9 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
       }
     }
     img.src = frame.frameDataUrl
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [frame.frameDataUrl, onLoaded])
 
   // Render photos canvas (bottom layer)
@@ -1271,8 +2045,10 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
     const canvas = photosCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    const W = frame.width, H = frame.height
-    canvas.width = W; canvas.height = H
+    const W = frame.width,
+      H = frame.height
+    canvas.width = W
+    canvas.height = H
 
     ctx.clearRect(0, 0, W, H)
 
@@ -1297,7 +2073,8 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
         const photo = photos[i]
         const off = slotOffsets[i] || { ox: 0, oy: 0, scale: 1 }
         const baseScale = Math.max(slot.w / photo.width, slot.h / photo.height) * off.scale
-        const dw = photo.width * baseScale, dh = photo.height * baseScale
+        const dw = photo.width * baseScale,
+          dh = photo.height * baseScale
         const dx = slot.x + (slot.w - dw) / 2 + (off.ox / 100) * slot.w
         const dy = slot.y + (slot.h - dh) / 2 + (off.oy / 100) * slot.h
         ctx.drawImage(photo, 0, 0, photo.width, photo.height, dx, dy, dw, dh)
@@ -1306,7 +2083,8 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
         ctx.fillRect(slot.x, slot.y, slot.w, slot.h)
         ctx.fillStyle = '#ccc'
         ctx.font = 'bold 14px Inter, system-ui, sans-serif'
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
         ctx.fillText(`Photo ${i + 1}`, slot.x + slot.w / 2, slot.y + slot.h / 2)
       }
       ctx.restore()
@@ -1318,20 +2096,33 @@ function FramePreviewCanvas({ frame, photos, slotOffsets, onLoaded }: {
     const canvas = frameCanvasRef.current
     if (!canvas || !frameImg) return
     const ctx = canvas.getContext('2d')!
-    const W = frame.width, H = frame.height
-    canvas.width = W; canvas.height = H
+    const W = frame.width,
+      H = frame.height
+    canvas.width = W
+    canvas.height = H
 
     // Draw the full frame image over the photos (photos will show through transparent areas of the PNG)
     ctx.drawImage(frameImg, 0, 0, W, H)
   }, [frame, frameImg])
 
   return (
-    <div style={{ position: 'relative', width: '100%', aspectRatio: `${frame.width}/${frame.height}` }}>
+    <div
+      style={{ position: 'relative', width: '100%', aspectRatio: `${frame.width}/${frame.height}` }}
+    >
       {/* Photos canvas (bottom layer) */}
       <canvas ref={photosCanvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       {/* Frame canvas (top layer — frame PNG with slot areas punched out) */}
       {frame.frameDataUrl && (
-        <canvas ref={frameCanvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+        <canvas
+          ref={frameCanvasRef}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+          }}
+        />
       )}
     </div>
   )
@@ -1348,7 +2139,10 @@ function MobileBottomSheet({ children }: { children: React.ReactNode }) {
       const delta = dragY.current - ev.clientY
       if (Math.abs(delta) > 30) setExpanded(delta > 0)
     }
-    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp) }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
   }, [])
@@ -1356,14 +2150,23 @@ function MobileBottomSheet({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-[51] bg-(--panel-bg) border-t border-(--overlay-border) rounded-t-2xl shadow-[0_-4px_30px_rgba(0,0,0,0.3)] flex flex-col"
-      style={{ height: expanded ? '55vh' : '110px', transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)' }}
+      style={{
+        height: expanded ? '55vh' : '110px',
+        transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
+      }}
     >
       {/* Drag handle */}
-      <div className="shrink-0 flex items-center justify-center py-2.5 cursor-grab active:cursor-grabbing touch-manipulation" onPointerDown={onDragStart} onClick={() => setExpanded(v => !v)}>
+      <div
+        className="shrink-0 flex items-center justify-center py-2.5 cursor-grab active:cursor-grabbing touch-manipulation"
+        onPointerDown={onDragStart}
+        onClick={() => setExpanded((v) => !v)}
+      >
         <div className="w-10 h-1 rounded-full bg-[var(--text-muted)]/30" />
       </div>
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'overflow-hidden'}`}>
+      <div
+        className={`flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'overflow-hidden'}`}
+      >
         {children}
       </div>
     </div>

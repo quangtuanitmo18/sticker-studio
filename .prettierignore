@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+dist
+build
+public
+*.min.js
+*.css.map
+.env
+.env.*

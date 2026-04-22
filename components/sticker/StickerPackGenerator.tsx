@@ -1,15 +1,15 @@
 'use client'
 
 import {
-    ArrowLeft,
-    Download,
-    Edit3,
-    MessageCircle,
-    Package,
-    Plus,
-    Send,
-    Sparkles,
-    X
+  ArrowLeft,
+  Download,
+  Edit3,
+  MessageCircle,
+  Package,
+  Plus,
+  Send,
+  Sparkles,
+  X,
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import * as React from 'react'
@@ -24,46 +24,62 @@ import { OVERLAY_PRESETS } from '@/lib/sticker-overlays'
 import type { ExpressionPreset } from '@/lib/sticker-presets'
 import { EXPRESSION_PRESETS, STICKER_PACK_PRESETS, TEXT_PRESETS } from '@/lib/sticker-presets'
 import {
-    downloadStickerZip,
-    renderStickerPack,
-    type StickerConfig,
-    type StickerOutput,
+  downloadStickerZip,
+  renderStickerPack,
+  type StickerConfig,
+  type StickerOutput,
 } from '@/lib/sticker-renderer'
 
 // ─── Blendshape groups for editor ────────────────────────────
 
 const BLENDSHAPE_GROUPS: Record<string, string[]> = {
   Eyes: [
-    'eyeBlinkLeft', 'eyeBlinkRight', 'eyeWideLeft', 'eyeWideRight',
-    'eyeSquintLeft', 'eyeSquintRight', 'eyeLookUpLeft', 'eyeLookUpRight',
-    'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
-    'eyeLookOutLeft', 'eyeLookOutRight',
+    'eyeBlinkLeft',
+    'eyeBlinkRight',
+    'eyeWideLeft',
+    'eyeWideRight',
+    'eyeSquintLeft',
+    'eyeSquintRight',
+    'eyeLookUpLeft',
+    'eyeLookUpRight',
+    'eyeLookDownLeft',
+    'eyeLookDownRight',
+    'eyeLookInLeft',
+    'eyeLookInRight',
+    'eyeLookOutLeft',
+    'eyeLookOutRight',
   ],
-  Brows: [
-    'browInnerUp', 'browDownLeft', 'browDownRight',
-    'browOuterUpLeft', 'browOuterUpRight',
-  ],
+  Brows: ['browInnerUp', 'browDownLeft', 'browDownRight', 'browOuterUpLeft', 'browOuterUpRight'],
   Mouth: [
-    'jawOpen', 'jawForward', 'jawLeft', 'jawRight',
-    'mouthSmileLeft', 'mouthSmileRight', 'mouthFrownLeft', 'mouthFrownRight',
-    'mouthLeft', 'mouthRight', 'mouthPucker', 'mouthFunnel',
-    'mouthPressLeft', 'mouthPressRight',
-    'mouthUpperUpLeft', 'mouthUpperUpRight',
-    'mouthLowerDownLeft', 'mouthLowerDownRight',
-    'mouthStretchLeft', 'mouthStretchRight',
-    'mouthShrugUpper', 'mouthShrugLower',
-    'mouthRollUpper', 'mouthRollLower',
+    'jawOpen',
+    'jawForward',
+    'jawLeft',
+    'jawRight',
+    'mouthSmileLeft',
+    'mouthSmileRight',
+    'mouthFrownLeft',
+    'mouthFrownRight',
+    'mouthLeft',
+    'mouthRight',
+    'mouthPucker',
+    'mouthFunnel',
+    'mouthPressLeft',
+    'mouthPressRight',
+    'mouthUpperUpLeft',
+    'mouthUpperUpRight',
+    'mouthLowerDownLeft',
+    'mouthLowerDownRight',
+    'mouthStretchLeft',
+    'mouthStretchRight',
+    'mouthShrugUpper',
+    'mouthShrugLower',
+    'mouthRollUpper',
+    'mouthRollLower',
     'mouthClose',
   ],
-  Cheeks: [
-    'cheekSquintLeft', 'cheekSquintRight', 'cheekPuff',
-  ],
-  Nose: [
-    'noseSneerLeft', 'noseSneerRight',
-  ],
-  Tongue: [
-    'tongueOut',
-  ],
+  Cheeks: ['cheekSquintLeft', 'cheekSquintRight', 'cheekPuff'],
+  Nose: ['noseSneerLeft', 'noseSneerRight'],
+  Tongue: ['tongueOut'],
 }
 
 // ─── Sticker edit state ──────────────────────────────────────
@@ -78,7 +94,9 @@ interface StickerEditState {
 
 // ─── Component ───────────────────────────────────────────────
 
-export default function StickerPackGenerator() {
+import { Suspense } from 'react'
+
+function StickerPackGeneratorInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const avatarUrl = searchParams.get('avatar')
@@ -93,7 +111,9 @@ export default function StickerPackGenerator() {
   // Editor state
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null)
   const [editState, setEditState] = React.useState<StickerEditState | null>(null)
-  const [activeEditorTab, setActiveEditorTab] = React.useState<'expression' | 'pose' | 'overlay' | 'text' | 'blendshapes'>('expression')
+  const [activeEditorTab, setActiveEditorTab] = React.useState<
+    'expression' | 'pose' | 'overlay' | 'text' | 'blendshapes'
+  >('expression')
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = React.useState(false)
 
@@ -116,26 +136,29 @@ export default function StickerPackGenerator() {
   }, [])
 
   // ─── Render sticker pack ──
-  const renderPack = React.useCallback(async (configs: StickerConfig[]) => {
-    if (!avatarUrl) return
+  const renderPack = React.useCallback(
+    async (configs: StickerConfig[]) => {
+      if (!avatarUrl) return
 
-    setIsRendering(true)
-    setError(null)
+      setIsRendering(true)
+      setError(null)
 
-    try {
-      const result = await renderStickerPack(
-        avatarUrl,
-        configs,
-        { width: 512, height: 512, transparent: true },
-        (current, total) => setProgress({ current, total }),
-      )
-      setStickers(result)
-    } catch (err: any) {
-      setError(err.message || 'Failed to render stickers')
-    } finally {
-      setIsRendering(false)
-    }
-  }, [avatarUrl])
+      try {
+        const result = await renderStickerPack(
+          avatarUrl,
+          configs,
+          { width: 512, height: 512, transparent: true },
+          (current, total) => setProgress({ current, total }),
+        )
+        setStickers(result)
+      } catch (err: any) {
+        setError(err.message || 'Failed to render stickers')
+      } finally {
+        setIsRendering(false)
+      }
+    },
+    [avatarUrl],
+  )
 
   // Initial render
   React.useEffect(() => {
@@ -182,11 +205,11 @@ export default function StickerPackGenerator() {
           overlay: editState.overlay,
           customBlendshapes: editState.customBlendshapes,
         }
-        const result = await renderStickerPack(
-          avatarUrl,
-          [previewConfig],
-          { width: 512, height: 512, transparent: true },
-        )
+        const result = await renderStickerPack(avatarUrl, [previewConfig], {
+          width: 512,
+          height: 512,
+          transparent: true,
+        })
         setPreviewUrl(result[0].dataUrl)
       } catch {
         // preview failed silently
@@ -217,11 +240,11 @@ export default function StickerPackGenerator() {
     // Re-render just this one
     setIsRendering(true)
     try {
-      const result = await renderStickerPack(
-        avatarUrl,
-        [newConfig],
-        { width: 512, height: 512, transparent: true },
-      )
+      const result = await renderStickerPack(avatarUrl, [newConfig], {
+        width: 512,
+        height: 512,
+        transparent: true,
+      })
       const newStickers = [...stickers]
       newStickers[editingIndex] = result[0]
       setStickers(newStickers)
@@ -319,11 +342,11 @@ export default function StickerPackGenerator() {
 
     // Render a placeholder for the new sticker
     if (avatarUrl) {
-      renderStickerPack(
-        avatarUrl,
-        [newConfig],
-        { width: 512, height: 512, transparent: true },
-      ).then((result) => {
+      renderStickerPack(avatarUrl, [newConfig], {
+        width: 512,
+        height: 512,
+        transparent: true,
+      }).then((result) => {
         setStickers((prev) => [...prev, result[0]])
       })
     }
@@ -333,11 +356,25 @@ export default function StickerPackGenerator() {
   if (!avatarUrl) {
     return (
       <div className="rpm-preview-page">
-        <div className="rpm-viewport" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+        <div
+          className="rpm-viewport"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px',
+          }}
+        >
           <Sparkles size={48} style={{ color: '#7c3aed' }} />
           <h2 style={{ color: '#e4e4e7', fontSize: '20px', fontWeight: 600 }}>No Avatar Found</h2>
-          <p style={{ color: '#71717a', fontSize: '14px' }}>Create an avatar first to generate a sticker pack.</p>
-          <button className="rpm-btn rpm-btn-primary" onClick={() => router.push('/avatar-creator')}>
+          <p style={{ color: '#71717a', fontSize: '14px' }}>
+            Create an avatar first to generate a sticker pack.
+          </p>
+          <button
+            className="rpm-btn rpm-btn-primary"
+            onClick={() => router.push('/avatar-creator')}
+          >
             <ArrowLeft size={16} />
             Go to Avatar Creator
           </button>
@@ -363,15 +400,27 @@ export default function StickerPackGenerator() {
           </p>
         </div>
         <div className="rpm-header-actions">
-          <button className="rpm-btn rpm-btn-primary rpm-btn-sm" onClick={addCustomSticker} title="Add custom sticker" disabled={isRendering}>
+          <button
+            className="rpm-btn rpm-btn-primary rpm-btn-sm"
+            onClick={addCustomSticker}
+            title="Add custom sticker"
+            disabled={isRendering}
+          >
             <Plus size={16} /> Add
           </button>
           {stickers.length > 0 && (
-            <button className="rpm-btn rpm-btn-primary" onClick={handleDownloadAll} disabled={isRendering}>
+            <button
+              className="rpm-btn rpm-btn-primary"
+              onClick={handleDownloadAll}
+              disabled={isRendering}
+            >
               <Download size={16} /> Download All
             </button>
           )}
-          <button className="rpm-btn rpm-btn-outline" onClick={() => router.push('/avatar-creator')}>
+          <button
+            className="rpm-btn rpm-btn-outline"
+            onClick={() => router.push('/avatar-creator')}
+          >
             <ArrowLeft size={16} /> Back
           </button>
         </div>
@@ -381,15 +430,25 @@ export default function StickerPackGenerator() {
       <div className="sticker-grid-container">
         {isRendering && stickers.length === 0 ? (
           <div className="sticker-loading">
-            <Loading text={`Rendering sticker ${progress.current + 1} of ${progress.total}...`} size="lg" />
+            <Loading
+              text={`Rendering sticker ${progress.current + 1} of ${progress.total}...`}
+              size="lg"
+            />
             <div className="sticker-progress-bar">
-              <div className="sticker-progress-fill" style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} />
+              <div
+                className="sticker-progress-fill"
+                style={{
+                  width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
+                }}
+              />
             </div>
           </div>
         ) : error ? (
           <div className="sticker-error">
             <p>{error}</p>
-            <button className="rpm-btn rpm-btn-primary" onClick={handleRegenAll}>Retry</button>
+            <button className="rpm-btn rpm-btn-primary" onClick={handleRegenAll}>
+              Retry
+            </button>
           </div>
         ) : (
           <div className="sticker-grid">
@@ -408,10 +467,18 @@ export default function StickerPackGenerator() {
                   <span>{sticker.label}</span>
                 </div>
                 <div className="sticker-actions">
-                  <button className="rpm-btn rpm-btn-outline rpm-btn-sm" onClick={() => openEditor(index)} title="Customize">
+                  <button
+                    className="rpm-btn rpm-btn-outline rpm-btn-sm"
+                    onClick={() => openEditor(index)}
+                    title="Customize"
+                  >
                     <Edit3 size={14} />
                   </button>
-                  <button className="rpm-btn rpm-btn-primary rpm-btn-sm" onClick={() => handleDownload(sticker)} title="Download">
+                  <button
+                    className="rpm-btn rpm-btn-primary rpm-btn-sm"
+                    onClick={() => handleDownload(sticker)}
+                    title="Download"
+                  >
                     <Download size={14} />
                   </button>
                 </div>
@@ -427,10 +494,18 @@ export default function StickerPackGenerator() {
           <button className="rpm-btn rpm-btn-primary" onClick={handleDownloadAll}>
             <Package size={16} /> Download All (ZIP)
           </button>
-          <button className="rpm-btn rpm-btn-outline" onClick={() => handlePlatformExport('telegram')} title="Export for Telegram (512px WebP)">
+          <button
+            className="rpm-btn rpm-btn-outline"
+            onClick={() => handlePlatformExport('telegram')}
+            title="Export for Telegram (512px WebP)"
+          >
             <Send size={16} /> Telegram
           </button>
-          <button className="rpm-btn rpm-btn-outline" onClick={() => handlePlatformExport('whatsapp')} title="Export for WhatsApp (512px WebP)">
+          <button
+            className="rpm-btn rpm-btn-outline"
+            onClick={() => handlePlatformExport('whatsapp')}
+            title="Export for WhatsApp (512px WebP)"
+          >
             <MessageCircle size={16} /> WhatsApp
           </button>
         </div>
@@ -442,7 +517,9 @@ export default function StickerPackGenerator() {
           <div className="editor-panel" onClick={(e) => e.stopPropagation()}>
             {/* Editor header */}
             <div className="editor-header">
-              <h3>Customize: {editState.expression.emoji} {editState.expression.label}</h3>
+              <h3>
+                Customize: {editState.expression.emoji} {editState.expression.label}
+              </h3>
               <button className="rpm-btn rpm-btn-outline rpm-btn-sm" onClick={closeEditor}>
                 <X size={14} />
               </button>
@@ -473,13 +550,15 @@ export default function StickerPackGenerator() {
               <div className="editor-settings">
                 {/* Editor tabs */}
                 <div className="editor-tabs">
-                  {([
-                    { key: 'expression', label: '😀 Expression', icon: null },
-                    { key: 'pose', label: '🤸 Pose', icon: null },
-                    { key: 'overlay', label: '✨ Effects', icon: null },
-                    { key: 'text', label: '💬 Text', icon: null },
-                    { key: 'blendshapes', label: '🏛️ Fine Tune', icon: null },
-                  ] as const).map((tab) => (
+                  {(
+                    [
+                      { key: 'expression', label: '😀 Expression', icon: null },
+                      { key: 'pose', label: '🤸 Pose', icon: null },
+                      { key: 'overlay', label: '✨ Effects', icon: null },
+                      { key: 'text', label: '💬 Text', icon: null },
+                      { key: 'blendshapes', label: '🏛️ Fine Tune', icon: null },
+                    ] as const
+                  ).map((tab) => (
                     <button
                       key={tab.key}
                       className={`editor-tab ${activeEditorTab === tab.key ? 'active' : ''}`}
@@ -499,11 +578,17 @@ export default function StickerPackGenerator() {
                         <button
                           key={expr.id}
                           className={`editor-chip ${editState.expression.id === expr.id ? 'active' : ''}`}
-                          onClick={() => setEditState((s) => s ? ({
-                            ...s,
-                            expression: expr,
-                            customBlendshapes: { ...expr.blendshapes },
-                          }) : s)}
+                          onClick={() =>
+                            setEditState((s) =>
+                              s
+                                ? {
+                                    ...s,
+                                    expression: expr,
+                                    customBlendshapes: { ...expr.blendshapes },
+                                  }
+                                : s,
+                            )
+                          }
                         >
                           <span className="editor-chip-emoji">{expr.emoji}</span>
                           <span>{expr.label}</span>
@@ -519,7 +604,7 @@ export default function StickerPackGenerator() {
                         <button
                           key={pose.id}
                           className={`editor-chip ${editState.pose.id === pose.id ? 'active' : ''}`}
-                          onClick={() => setEditState((s) => s ? ({ ...s, pose }) : s)}
+                          onClick={() => setEditState((s) => (s ? { ...s, pose } : s))}
                         >
                           <span className="editor-chip-emoji">{pose.emoji}</span>
                           <span>{pose.label}</span>
@@ -535,7 +620,7 @@ export default function StickerPackGenerator() {
                         <button
                           key={ov.id}
                           className={`editor-chip ${editState.overlay.id === ov.id ? 'active' : ''}`}
-                          onClick={() => setEditState((s) => s ? ({ ...s, overlay: ov }) : s)}
+                          onClick={() => setEditState((s) => (s ? { ...s, overlay: ov } : s))}
                         >
                           <span className="editor-chip-emoji">{ov.emoji}</span>
                           <span>{ov.label}</span>
@@ -551,7 +636,9 @@ export default function StickerPackGenerator() {
                         <input
                           type="text"
                           value={editState.text}
-                          onChange={(e) => setEditState((s) => s ? ({ ...s, text: e.target.value }) : s)}
+                          onChange={(e) =>
+                            setEditState((s) => (s ? { ...s, text: e.target.value } : s))
+                          }
                           placeholder="Type custom text..."
                           className="editor-text-input"
                           maxLength={20}
@@ -559,7 +646,7 @@ export default function StickerPackGenerator() {
                         {editState.text && (
                           <button
                             className="editor-text-clear"
-                            onClick={() => setEditState((s) => s ? ({ ...s, text: '' }) : s)}
+                            onClick={() => setEditState((s) => (s ? { ...s, text: '' } : s))}
                           >
                             <X size={14} />
                           </button>
@@ -571,7 +658,11 @@ export default function StickerPackGenerator() {
                           <button
                             key={text}
                             className={`sticker-text-chip ${editState.text === text ? 'active' : ''}`}
-                            onClick={() => setEditState((s) => s ? ({ ...s, text: editState.text === text ? '' : text }) : s)}
+                            onClick={() =>
+                              setEditState((s) =>
+                                s ? { ...s, text: editState.text === text ? '' : text } : s,
+                              )
+                            }
                           >
                             {text}
                           </button>
@@ -584,7 +675,11 @@ export default function StickerPackGenerator() {
                   {activeEditorTab === 'blendshapes' && (
                     <div className="editor-blendshapes">
                       {Object.entries(BLENDSHAPE_GROUPS).map(([group, names]) => (
-                        <details key={group} className="editor-bs-group" open={group === 'Mouth' || group === 'Eyes'}>
+                        <details
+                          key={group}
+                          className="editor-bs-group"
+                          open={group === 'Mouth' || group === 'Eyes'}
+                        >
                           <summary className="editor-bs-group-title">{group}</summary>
                           <div className="editor-bs-sliders">
                             {names.map((name) => (
@@ -623,8 +718,14 @@ export default function StickerPackGenerator() {
 
             {/* Apply button */}
             <div className="editor-footer">
-              <button className="rpm-btn rpm-btn-outline" onClick={closeEditor}>Cancel</button>
-              <button className="rpm-btn rpm-btn-primary" onClick={applyEdit} disabled={isRendering}>
+              <button className="rpm-btn rpm-btn-outline" onClick={closeEditor}>
+                Cancel
+              </button>
+              <button
+                className="rpm-btn rpm-btn-primary"
+                onClick={applyEdit}
+                disabled={isRendering}
+              >
                 {isRendering ? 'Rendering...' : 'Apply Changes'}
               </button>
             </div>
@@ -632,5 +733,19 @@ export default function StickerPackGenerator() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function StickerPackGenerator() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rpm-preview-page">
+          <div className="sticker-loading">Loading...</div>
+        </div>
+      }
+    >
+      <StickerPackGeneratorInner />
+    </Suspense>
   )
 }

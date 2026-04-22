@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { downloadUrl } from '@/lib/download'
 import { ArrowLeft, ArrowRight, Check, Download, UploadCloud } from 'lucide-react'
+import Image from 'next/image'
 import * as React from 'react'
 import { useDropzone } from 'react-dropzone'
 
@@ -27,25 +28,59 @@ const STYLES = [
   { id: 'Cyberpunk', label: 'Cyberpunk', image: '/styles/blowing_kiss.png' },
   { id: 'Claymation', label: 'Claymation', image: '/styles/crying.png' },
   { id: 'Pencil Sketch', label: 'Pencil Sketch', image: '/styles/laughing.png' },
-  { id: 'Pop Art', label: 'Pop Art', image: '/styles/affectionate.png' }
+  { id: 'Pop Art', label: 'Pop Art', image: '/styles/affectionate.png' },
 ]
 
 const EMOTIONS = [
-  { id: 'laughing', emoji: '😂', label: 'Laughing', prompt: 'Laughing out loud, crying tears of joy, hilarious, big open mouth smile' },
-  { id: 'affectionate', emoji: '🥰', label: 'Affectionate', prompt: 'Affectionate, smiling face with hearts, loving, warm, caring' },
-  { id: 'thinking', emoji: '🤔', label: 'Thinking', prompt: 'Thinking, hand on chin, pondering, curious, inquisitive' },
-  { id: 'winking', emoji: '😉', label: 'Winking', prompt: 'Winking, playful, cheeky, one eye closed, slight smile' },
-  { id: 'blowing_kiss', emoji: '😘', label: 'Blowing Kiss', prompt: 'Blowing a kiss, winking, heart, affectionate, sweet' },
-  { id: 'crying', emoji: '😢', label: 'Crying', prompt: 'Crying, sad, single tear, upset, emotional' }
+  {
+    id: 'laughing',
+    emoji: '😂',
+    label: 'Laughing',
+    prompt: 'Laughing out loud, crying tears of joy, hilarious, big open mouth smile',
+  },
+  {
+    id: 'affectionate',
+    emoji: '🥰',
+    label: 'Affectionate',
+    prompt: 'Affectionate, smiling face with hearts, loving, warm, caring',
+  },
+  {
+    id: 'thinking',
+    emoji: '🤔',
+    label: 'Thinking',
+    prompt: 'Thinking, hand on chin, pondering, curious, inquisitive',
+  },
+  {
+    id: 'winking',
+    emoji: '😉',
+    label: 'Winking',
+    prompt: 'Winking, playful, cheeky, one eye closed, slight smile',
+  },
+  {
+    id: 'blowing_kiss',
+    emoji: '😘',
+    label: 'Blowing Kiss',
+    prompt: 'Blowing a kiss, winking, heart, affectionate, sweet',
+  },
+  {
+    id: 'crying',
+    emoji: '😢',
+    label: 'Crying',
+    prompt: 'Crying, sad, single tear, upset, emotional',
+  },
 ]
 
 const STEPS = ['Upload', 'Style', 'Generate']
 
 export default function PackGenPage() {
   const [step, setStep] = React.useState(0)
-  const [sourceImage, setSourceImage] = React.useState<{ url: string, base64: string, mimeType: string } | null>(null)
+  const [sourceImage, setSourceImage] = React.useState<{
+    url: string
+    base64: string
+    mimeType: string
+  } | null>(null)
   const [selectedStyle, setSelectedStyle] = React.useState(STYLES[0].id)
-  const [generatedPack, setGeneratedPack] = React.useState<{ id: string, url: string }[]>([])
+  const [generatedPack, setGeneratedPack] = React.useState<{ id: string; url: string }[]>([])
   const [isGenerating, setIsGenerating] = React.useState(false)
   const [loadingText, setLoadingText] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
@@ -69,7 +104,7 @@ export default function PackGenPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
-    maxFiles: 1
+    maxFiles: 1,
   })
 
   const generatePack = async () => {
@@ -81,13 +116,18 @@ export default function PackGenPage() {
     try {
       const base64Data = sourceImage.base64.split(',')[1]
       const mimeType = sourceImage.mimeType
-      const newPack: { id: string, url: string }[] = []
+      const newPack: { id: string; url: string }[] = []
       for (const emotion of EMOTIONS) {
         setLoadingText(`Creating ${emotion.label}...`)
         const res = await fetch('/api/generate-sticker', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64Data, mimeType, style: selectedStyle, emotionPrompt: emotion.prompt }),
+          body: JSON.stringify({
+            imageBase64: base64Data,
+            mimeType,
+            style: selectedStyle,
+            emotionPrompt: emotion.prompt,
+          }),
         })
         if (!res.ok) {
           const errData = await res.json().catch(() => ({ error: 'Unknown error' }))
@@ -97,16 +137,34 @@ export default function PackGenPage() {
         const generatedBase64 = `data:${result.mimeType};base64,${result.imageBase64}`
         setLoadingText(`Processing ${emotion.label}...`)
         const resizedBase64 = await new Promise<string>((resolve) => {
-          const img = new Image()
+          const img = new window.Image()
           img.onload = () => {
             const canvas = document.createElement('canvas')
-            let w = img.width, h = img.height
-            if (w > h) { if (w > 1024) { h *= 1024 / w; w = 1024 } }
-            else { if (h > 1024) { w *= 1024 / h; h = 1024 } }
-            canvas.width = w; canvas.height = h
+            let w = img.width,
+              h = img.height
+            if (w > h) {
+              if (w > 1024) {
+                h *= 1024 / w
+                w = 1024
+              }
+            } else {
+              if (h > 1024) {
+                w *= 1024 / h
+                h = 1024
+              }
+            }
+            canvas.width = w
+            canvas.height = h
             const ctx = canvas.getContext('2d')
-            if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL(generatedBase64.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', 0.8)) }
-            else resolve(generatedBase64)
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h)
+              resolve(
+                canvas.toDataURL(
+                  generatedBase64.startsWith('data:image/png') ? 'image/png' : 'image/jpeg',
+                  0.8,
+                ),
+              )
+            } else resolve(generatedBase64)
           }
           img.onerror = () => resolve(generatedBase64)
           img.src = generatedBase64
@@ -114,10 +172,14 @@ export default function PackGenPage() {
         const bgRes = await fetch('/api/remove-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: resizedBase64 })
+          body: JSON.stringify({ imageUrl: resizedBase64 }),
         })
-        if (!bgRes.ok) { newPack.push({ id: emotion.id, url: generatedBase64 }) }
-        else { const bgData = await bgRes.json(); newPack.push({ id: emotion.id, url: bgData.url }) }
+        if (!bgRes.ok) {
+          newPack.push({ id: emotion.id, url: generatedBase64 })
+        } else {
+          const bgData = await bgRes.json()
+          newPack.push({ id: emotion.id, url: bgData.url })
+        }
         setGeneratedPack([...newPack])
       }
       setLoadingText('Done!')
@@ -125,12 +187,21 @@ export default function PackGenPage() {
     } catch (err: any) {
       console.error(err)
       setError(parseErrorMessage(err))
-    } finally { setIsGenerating(false) }
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleDownloadAll = () => {
     generatedPack.forEach((sticker, i) => {
-      setTimeout(() => downloadUrl(sticker.url, `sticker_${selectedStyle.replace(/\s+/g, '_').toLowerCase()}_${sticker.id}.png`), i * 500)
+      setTimeout(
+        () =>
+          downloadUrl(
+            sticker.url,
+            `sticker_${selectedStyle.replace(/\s+/g, '_').toLowerCase()}_${sticker.id}.png`,
+          ),
+        i * 500,
+      )
     })
     toast(`Downloading ${generatedPack.length} stickers...`, 'success')
   }
@@ -141,18 +212,32 @@ export default function PackGenPage() {
       <div className="shrink-0 flex items-center justify-center gap-2 py-4 md:py-5 px-4 md:px-6 border-b border-[var(--overlay-border)]">
         {STEPS.map((s, i) => (
           <React.Fragment key={s}>
-            {i > 0 && <div className={`w-12 h-[1px] ${i <= step ? 'bg-[#FF6B4A]' : 'bg-white/[0.06]'} transition-colors`} />}
+            {i > 0 && (
+              <div
+                className={`w-12 h-[1px] ${i <= step ? 'bg-[#FF6B4A]' : 'bg-white/[0.06]'} transition-colors`}
+              />
+            )}
             <button
-              onClick={() => { if (i < step || (i === 1 && sourceImage)) setStep(i) }}
+              onClick={() => {
+                if (i < step || (i === 1 && sourceImage)) setStep(i)
+              }}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                i === step ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]'
-                : i < step ? 'bg-[var(--card-bg-hover)] text-[var(--text-secondary)]'
-                : 'text-[var(--text-muted)]'
+                i === step
+                  ? 'bg-[#FF6B4A]/15 text-[#FF6B4A]'
+                  : i < step
+                    ? 'bg-[var(--card-bg-hover)] text-[var(--text-secondary)]'
+                    : 'text-[var(--text-muted)]'
               }`}
             >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                i < step ? 'bg-[#FF6B4A] text-white' : i === step ? 'bg-[#FF6B4A]/20 text-[#FF6B4A]' : 'bg-[var(--card-bg-hover)] text-[var(--text-muted)]'
-              }`}>
+              <span
+                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  i < step
+                    ? 'bg-[#FF6B4A] text-white'
+                    : i === step
+                      ? 'bg-[#FF6B4A]/20 text-[#FF6B4A]'
+                      : 'bg-[var(--card-bg-hover)] text-[var(--text-muted)]'
+                }`}
+              >
                 {i < step ? <Check className="w-3 h-3" /> : i + 1}
               </span>
               {s}
@@ -171,12 +256,16 @@ export default function PackGenPage() {
                 <h1 className="font-(--font-display) text-3xl md:text-4xl font-bold mb-3 text-[var(--text-primary)]">
                   AI Sticker Pack
                 </h1>
-                <p className="text-[var(--text-tertiary)] text-sm">Upload a clear selfie to generate 6 expressive reaction stickers</p>
+                <p className="text-[var(--text-tertiary)] text-sm">
+                  Upload a clear selfie to generate 6 expressive reaction stickers
+                </p>
               </div>
               <div
                 {...getRootProps()}
                 className={`aspect-square max-w-md mx-auto rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
-                  isDragActive ? 'border-[#FF6B4A] bg-[#FF6B4A]/[0.03] scale-[1.01]' : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] hover:bg-[var(--card-bg)]'
+                  isDragActive
+                    ? 'border-[#FF6B4A] bg-[#FF6B4A]/[0.03] scale-[1.01]'
+                    : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] hover:bg-[var(--card-bg)]'
                 }`}
               >
                 <input {...getInputProps()} />
@@ -190,11 +279,15 @@ export default function PackGenPage() {
               </div>
               {/* Emotions preview */}
               <div className="flex items-center justify-center gap-4 mt-8">
-                {EMOTIONS.map(e => (
-                  <span key={e.id} className="text-2xl" title={e.label}>{e.emoji}</span>
+                {EMOTIONS.map((e) => (
+                  <span key={e.id} className="text-2xl" title={e.label}>
+                    {e.emoji}
+                  </span>
                 ))}
               </div>
-              <p className="text-center text-[11px] text-[var(--text-muted)] mt-2">These 6 emotions will be generated</p>
+              <p className="text-center text-[11px] text-[var(--text-muted)] mt-2">
+                These 6 emotions will be generated
+              </p>
             </div>
           </div>
         )}
@@ -204,21 +297,39 @@ export default function PackGenPage() {
           <div className="flex-1 flex flex-col p-4 md:p-6 pb-24 md:pb-6 animate-fade-in">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="font-(--font-display) text-2xl font-bold text-[var(--text-primary)]">Choose a Style</h2>
-                <p className="text-sm text-[var(--text-tertiary)] mt-1">Pick the visual style for your sticker pack</p>
+                <h2 className="font-(--font-display) text-2xl font-bold text-[var(--text-primary)]">
+                  Choose a Style
+                </h2>
+                <p className="text-sm text-[var(--text-tertiary)] mt-1">
+                  Pick the visual style for your sticker pack
+                </p>
               </div>
               {sourceImage && (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-[var(--overlay-border)]">
-                    <img src={sourceImage.url} alt="Source" className="w-full h-full object-cover" />
+                  <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-[var(--overlay-border)]">
+                    <Image
+                      unoptimized
+                      src={sourceImage.url}
+                      alt="Source"
+                      fill
+                      className="object-cover"
+                    />
                   </div>
-                  <button onClick={() => { setSourceImage(null); setStep(0) }} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] cursor-pointer">Change photo</button>
+                  <button
+                    onClick={() => {
+                      setSourceImage(null)
+                      setStep(0)
+                    }}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] cursor-pointer"
+                  >
+                    Change photo
+                  </button>
                 </div>
               )}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 flex-1">
-              {STYLES.map(style => (
+              {STYLES.map((style) => (
                 <button
                   key={style.id}
                   onClick={() => setSelectedStyle(style.id)}
@@ -228,11 +339,19 @@ export default function PackGenPage() {
                       : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] bg-[var(--card-bg)]'
                   }`}
                 >
-                  <div className="aspect-square overflow-hidden bg-stone-900">
-                    <img src={style.image} alt={style.label} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                  <div className="relative aspect-square overflow-hidden bg-stone-900">
+                    <Image
+                      unoptimized
+                      src={style.image}
+                      alt={style.label}
+                      fill
+                      className="object-cover transition-transform group-hover:scale-105"
+                    />
                   </div>
                   <div className="p-3">
-                    <span className={`text-sm font-semibold ${selectedStyle === style.id ? 'text-[#FF6B4A]' : 'text-[var(--text-secondary)]'}`}>
+                    <span
+                      className={`text-sm font-semibold ${selectedStyle === style.id ? 'text-[#FF6B4A]' : 'text-[var(--text-secondary)]'}`}
+                    >
                       {style.label}
                     </span>
                   </div>
@@ -260,7 +379,9 @@ export default function PackGenPage() {
                   {isGenerating ? 'Generating...' : 'Your Pack'}
                 </h2>
                 <p className="text-sm text-[var(--text-tertiary)] mt-1">
-                  {isGenerating ? loadingText : `${generatedPack.length} stickers • ${selectedStyle} style`}
+                  {isGenerating
+                    ? loadingText
+                    : `${generatedPack.length} stickers • ${selectedStyle} style`}
                 </p>
               </div>
               {!isGenerating && generatedPack.length > 0 && (
@@ -273,7 +394,15 @@ export default function PackGenPage() {
             {error && (
               <div className="mb-4 px-4 py-3 bg-red-950/50 text-red-400 text-sm rounded-xl border border-red-900/30">
                 {error}
-                <Button variant="ghost" size="sm" className="ml-3 text-red-400" onClick={() => { setStep(1); setError(null) }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-3 text-red-400"
+                  onClick={() => {
+                    setStep(1)
+                    setError(null)
+                  }}
+                >
                   Try Again
                 </Button>
               </div>
@@ -282,7 +411,7 @@ export default function PackGenPage() {
             {/* Results grid with stagger animation */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-5 flex-1">
               {EMOTIONS.map((emotion, i) => {
-                const sticker = generatedPack.find(s => s.id === emotion.id)
+                const sticker = generatedPack.find((s) => s.id === emotion.id)
                 return (
                   <div
                     key={emotion.id}
@@ -292,9 +421,19 @@ export default function PackGenPage() {
                     <div className="w-full aspect-square rounded-2xl bg-[var(--canvas-bg)] bg-size-[16px_16px] border border-[var(--overlay-border)] flex items-center justify-center p-4 relative group overflow-hidden">
                       {sticker ? (
                         <>
-                          <img src={sticker.url} alt={emotion.label} className="w-full h-full object-contain drop-shadow-xl transition-transform duration-300 group-hover:scale-105" />
+                          <Image
+                            unoptimized
+                            src={sticker.url}
+                            alt={emotion.label}
+                            fill
+                            className="object-contain drop-shadow-xl transition-transform duration-300 group-hover:scale-105"
+                          />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
-                            <Button size="sm" variant="secondary" onClick={() => downloadUrl(sticker.url, `sticker_${emotion.id}.png`)}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => downloadUrl(sticker.url, `sticker_${emotion.id}.png`)}
+                            >
                               <Download className="w-4 h-4" /> Save
                             </Button>
                           </div>
@@ -307,7 +446,9 @@ export default function PackGenPage() {
                         </div>
                       )}
                     </div>
-                    <span className="text-xs font-medium text-[var(--text-tertiary)]">{emotion.emoji} {emotion.label}</span>
+                    <span className="text-xs font-medium text-[var(--text-tertiary)]">
+                      {emotion.emoji} {emotion.label}
+                    </span>
                   </div>
                 )
               })}
@@ -318,7 +459,15 @@ export default function PackGenPage() {
                 <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
                   <ArrowLeft className="w-4 h-4" /> Change Style
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => { setStep(0); setSourceImage(null); setGeneratedPack([]) }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStep(0)
+                    setSourceImage(null)
+                    setGeneratedPack([])
+                  }}
+                >
                   New Pack
                 </Button>
               </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
+import Image from 'next/image'
 import { generateThumbnails } from '@/lib/video-processor'
 
 interface VideoPreviewProps {
@@ -20,12 +21,17 @@ export default function VideoPreview({
   trimStart,
   trimEnd,
   onTrimChange,
-  onSeek
+  onSeek,
 }: VideoPreviewProps) {
   const [thumbnails, setThumbnails] = useState<string[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<'start' | 'end' | 'window' | null>(null)
-  const dragSession = useRef<{ startX: number; startTrimStart: number; startTrimEnd: number; isClick: boolean } | null>(null)
+  const dragSession = useRef<{
+    startX: number
+    startTrimStart: number
+    startTrimEnd: number
+    isClick: boolean
+  } | null>(null)
 
   useEffect(() => {
     if (!videoElement || duration === 0) return
@@ -33,7 +39,7 @@ export default function VideoPreview({
 
     const generate = async () => {
       // Slight delay to ensure DOM layout is complete for container width
-      await new Promise(r => setTimeout(r, 50))
+      await new Promise((r) => setTimeout(r, 50))
       if (!isMounted) return
 
       let width = 800
@@ -66,59 +72,70 @@ export default function VideoPreview({
     }
   }, [videoElement, duration])
 
-  const handlePointerMove = useCallback((e: PointerEvent) => {
-    if (!dragging || !containerRef.current || duration === 0) return
-    const rect = containerRef.current.getBoundingClientRect()
-    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
-    const timeAtX = (x / rect.width) * duration
-
-    if (dragging === 'start') {
-      const newStart = Math.min(timeAtX, trimEnd - 0.5) // Min 0.5s duration
-      onTrimChange(newStart, trimEnd)
-      onSeek(newStart)
-    } else if (dragging === 'end') {
-      const newEnd = Math.max(timeAtX, trimStart + 0.5)
-      onTrimChange(trimStart, newEnd)
-      onSeek(newEnd)
-    } else if (dragging === 'window' && dragSession.current) {
-      const deltaX = e.clientX - dragSession.current.startX
-      if (Math.abs(deltaX) > 3) {
-        dragSession.current.isClick = false
-      }
-
-      if (!dragSession.current.isClick) {
-        const deltaTime = (deltaX / rect.width) * duration
-        const session = dragSession.current
-        const windowDuration = session.startTrimEnd - session.startTrimStart
-        
-        let newStart = session.startTrimStart + deltaTime
-        let newEnd = session.startTrimEnd + deltaTime
-
-        if (newStart < 0) {
-          newStart = 0
-          newEnd = windowDuration
-        }
-        if (newEnd > duration) {
-          newEnd = duration
-          newStart = duration - windowDuration
-        }
-
-        onTrimChange(newStart, newEnd)
-        onSeek(newStart)
-      }
-    }
-  }, [dragging, duration, trimStart, trimEnd, onTrimChange, onSeek])
-
-  const handlePointerUp = useCallback((e: PointerEvent) => {
-    if (dragging === 'window' && dragSession.current?.isClick && containerRef.current && duration > 0) {
-      // It was just a click, perform seek
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      if (!dragging || !containerRef.current || duration === 0) return
       const rect = containerRef.current.getBoundingClientRect()
       const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
       const timeAtX = (x / rect.width) * duration
-      onSeek(timeAtX)
-    }
-    setDragging(null)
-  }, [dragging, duration, onSeek])
+
+      if (dragging === 'start') {
+        const newStart = Math.min(timeAtX, trimEnd - 0.5) // Min 0.5s duration
+        onTrimChange(newStart, trimEnd)
+        onSeek(newStart)
+      } else if (dragging === 'end') {
+        const newEnd = Math.max(timeAtX, trimStart + 0.5)
+        onTrimChange(trimStart, newEnd)
+        onSeek(newEnd)
+      } else if (dragging === 'window' && dragSession.current) {
+        const deltaX = e.clientX - dragSession.current.startX
+        if (Math.abs(deltaX) > 3) {
+          dragSession.current.isClick = false
+        }
+
+        if (!dragSession.current.isClick) {
+          const deltaTime = (deltaX / rect.width) * duration
+          const session = dragSession.current
+          const windowDuration = session.startTrimEnd - session.startTrimStart
+
+          let newStart = session.startTrimStart + deltaTime
+          let newEnd = session.startTrimEnd + deltaTime
+
+          if (newStart < 0) {
+            newStart = 0
+            newEnd = windowDuration
+          }
+          if (newEnd > duration) {
+            newEnd = duration
+            newStart = duration - windowDuration
+          }
+
+          onTrimChange(newStart, newEnd)
+          onSeek(newStart)
+        }
+      }
+    },
+    [dragging, duration, trimStart, trimEnd, onTrimChange, onSeek],
+  )
+
+  const handlePointerUp = useCallback(
+    (e: PointerEvent) => {
+      if (
+        dragging === 'window' &&
+        dragSession.current?.isClick &&
+        containerRef.current &&
+        duration > 0
+      ) {
+        // It was just a click, perform seek
+        const rect = containerRef.current.getBoundingClientRect()
+        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+        const timeAtX = (x / rect.width) * duration
+        onSeek(timeAtX)
+      }
+      setDragging(null)
+    },
+    [dragging, duration, onSeek],
+  )
 
   useEffect(() => {
     if (dragging) {
@@ -174,13 +191,13 @@ export default function VideoPreview({
       <div className="absolute inset-0 flex overflow-hidden rounded opacity-80 pointer-events-none bg-black">
         {thumbnails.length > 0 ? (
           thumbnails.map((src, i) => (
-            <img 
-              key={i} 
-              src={src || ''} 
-              className="h-full object-cover shrink-0 relative" 
-              style={{ width: `${100 / thumbnails.length}%` }} 
-              alt="" 
-            />
+            <div
+              key={src || i}
+              className="h-full relative shrink-0"
+              style={{ width: `${100 / thumbnails.length}%` }}
+            >
+              <Image unoptimized src={src || ''} fill className="object-cover" alt="" />
+            </div>
           ))
         ) : (
           <div className="w-full h-full flex items-center justify-center text-xs text-white/30 truncate px-2">
@@ -190,14 +207,14 @@ export default function VideoPreview({
       </div>
 
       {/* Clickable Area for Seeking */}
-      <div 
+      <div
         ref={containerRef}
-        className="absolute inset-0 z-20 cursor-pointer" 
+        className="absolute inset-0 z-20 cursor-pointer"
         onClick={handleTimelineClick}
       />
 
       {/* Active Trim Overlay */}
-      <div 
+      <div
         className="absolute inset-y-0 bg-[#FF6B4A]/20 border-y-2 border-[#FF6B4A] z-[25] cursor-move active:cursor-grabbing"
         style={{ left: `${trimStartPct}%`, width: `${trimEndPct - trimStartPct}%` }}
         onPointerDown={(e) => {
@@ -207,39 +224,45 @@ export default function VideoPreview({
             startX: e.clientX,
             startTrimStart: trimStart,
             startTrimEnd: trimEnd,
-            isClick: true
+            isClick: true,
           }
         }}
       />
 
       {/* Excluded regions darkening */}
-      <div 
+      <div
         className="absolute inset-y-0 left-0 bg-black/60 pointer-events-none z-10"
         style={{ width: `${trimStartPct}%` }}
       />
-      <div 
+      <div
         className="absolute inset-y-0 right-0 bg-black/60 pointer-events-none z-10"
         style={{ width: `${100 - trimEndPct}%` }}
       />
 
       {/* Trim Handles */}
-      <div 
+      <div
         className="absolute top-0 bottom-0 w-3 bg-white rounded-r-none z-30 transform -translate-x-full cursor-ew-resize flex items-center justify-center hover:scale-x-125 transition-transform"
         style={{ left: `${trimStartPct}%` }}
-        onPointerDown={(e) => { e.stopPropagation(); setDragging('start') }}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          setDragging('start')
+        }}
       >
         <div className="w-0.5 h-4 bg-black/30 rounded-full" />
       </div>
-      <div 
+      <div
         className="absolute top-0 bottom-0 w-3 bg-white rounded-l-none z-30 cursor-ew-resize flex items-center justify-center hover:scale-x-125 transition-transform"
         style={{ left: `${trimEndPct}%` }}
-        onPointerDown={(e) => { e.stopPropagation(); setDragging('end') }}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          setDragging('end')
+        }}
       >
         <div className="w-0.5 h-4 bg-black/30 rounded-full" />
       </div>
 
       {/* Current Time Playhead */}
-      <div 
+      <div
         ref={playheadRef}
         className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-40 transform -translate-x-1/2 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none"
         style={{ left: `${currentPct}%` }}
