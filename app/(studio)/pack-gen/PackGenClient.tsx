@@ -20,15 +20,40 @@ function parseErrorMessage(err: any): string {
   return raw
 }
 
+const EMOTION_FILES = [
+  'laughing.png',
+  'affectionate.png',
+  'thinking.png',
+  'winking.png',
+  'blowing_kiss.png',
+  'crying.png',
+]
+
 const STYLES = [
-  { id: '3D Pixar', label: '3D Pixar', image: '/styles/laughing.png' },
-  { id: 'Anime', label: 'Anime', image: '/styles/affectionate.png' },
-  { id: 'Chibi', label: 'Chibi', image: '/styles/winking.png' },
-  { id: 'Watercolor', label: 'Watercolor', image: '/styles/thinking.png' },
-  { id: 'Cyberpunk', label: 'Cyberpunk', image: '/styles/blowing_kiss.png' },
-  { id: 'Claymation', label: 'Claymation', image: '/styles/crying.png' },
-  { id: 'Pencil Sketch', label: 'Pencil Sketch', image: '/styles/laughing.png' },
-  { id: 'Pop Art', label: 'Pop Art', image: '/styles/affectionate.png' },
+  { id: '3D Pixar', label: '3D Pixar', images: EMOTION_FILES.map((f) => `/styles/3Dpixar/${f}`) },
+  { id: 'Anime', label: 'Anime', images: EMOTION_FILES.map((f) => `/styles/anime/${f}`) },
+  { id: 'Chibi', label: 'Chibi', images: EMOTION_FILES.map((f) => `/styles/chibi/${f}`) },
+  {
+    id: 'Watercolor',
+    label: 'Watercolor',
+    images: EMOTION_FILES.map((f) => `/styles/watercolor/${f}`),
+  },
+  {
+    id: 'Cyberpunk',
+    label: 'Cyberpunk',
+    images: EMOTION_FILES.map((f) => `/styles/cyberpunk/${f}`),
+  },
+  {
+    id: 'Claymation',
+    label: 'Claymation',
+    images: EMOTION_FILES.map((f) => `/styles/claymation/${f}`),
+  },
+  {
+    id: 'Pencil Sketch',
+    label: 'Pencil Sketch',
+    images: EMOTION_FILES.map((f) => `/styles/pencilsketch/${f}`),
+  },
+  { id: 'Pop Art', label: 'Pop Art', images: EMOTION_FILES.map((f) => `/styles/popart/${f}`) },
 ]
 
 const EMOTIONS = [
@@ -207,7 +232,7 @@ export default function PackGenPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* ═══ Step indicator ═══ */}
       <div className="shrink-0 flex items-center justify-center gap-2 py-4 md:py-5 px-4 md:px-6 border-b border-[var(--overlay-border)]">
         {STEPS.map((s, i) => (
@@ -247,7 +272,7 @@ export default function PackGenPage() {
       </div>
 
       {/* ═══ Step content ═══ */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-y-auto min-h-0">
         {/* Step 0: Upload */}
         {step === 0 && (
           <div className="flex-1 flex items-center justify-center p-4 md:p-6 pb-24 md:pb-6 animate-fade-in">
@@ -339,14 +364,18 @@ export default function PackGenPage() {
                       : 'border-[var(--overlay-border)] hover:border-[var(--overlay-border-hover)] bg-[var(--card-bg)]'
                   }`}
                 >
-                  <div className="relative aspect-square overflow-hidden bg-stone-900">
-                    <Image
-                      unoptimized
-                      src={style.image}
-                      alt={style.label}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
-                    />
+                  <div className="relative aspect-square overflow-hidden bg-stone-900 grid grid-cols-3 grid-rows-2 gap-[2px]">
+                    {style.images.map((img, idx) => (
+                      <div key={idx} className="relative w-full h-full overflow-hidden">
+                        <Image
+                          unoptimized
+                          src={img}
+                          alt={`${style.label} ${idx}`}
+                          fill
+                          className="object-cover transition-transform group-hover:scale-110"
+                        />
+                      </div>
+                    ))}
                   </div>
                   <div className="p-3">
                     <span
