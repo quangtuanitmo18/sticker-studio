@@ -368,10 +368,11 @@ export default function PackGenPage() {
                     {style.images.map((img, idx) => (
                       <div key={idx} className="relative w-full h-full overflow-hidden">
                         <Image
-                          unoptimized
                           src={img}
                           alt={`${style.label} ${idx}`}
                           fill
+                          sizes="(max-width: 768px) 33vw, 15vw"
+                          quality={60}
                           className="object-cover transition-transform group-hover:scale-110"
                         />
                       </div>
